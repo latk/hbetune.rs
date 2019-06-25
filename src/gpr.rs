@@ -493,8 +493,8 @@ fn fit_kernel<A: Scalar>(
     let Capture { theta, noise: captured_noise, mat_k_factorization, alpha, lml } =
         capture.replace(None).unwrap();
 
-    *kernel = kernel.clone().with_theta(theta.as_slice()).unwrap();
-    let noise = noise.with_value(captured_noise).unwrap();
+    *kernel = kernel.clone().with_clamped_theta(theta.as_slice());
+    let noise = noise.with_clamped_value(captured_noise);
 
     // Precompute arrays needed at prediction
     use ndarray_linalg::cholesky::*;

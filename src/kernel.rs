@@ -30,6 +30,12 @@ pub trait Kernel: Clone + std::fmt::Debug {
     fn with_theta(self, theta: &[f64]) -> Result<Self, BoundsError<f64>>
     where Self: Sized;
 
+    /// Update the kernel parameters with a theta vector.
+    /// Adjust the parameters if they would otherwise violate bounds.
+    /// Panics if the theta vector has wrong lenght – must equal n_params().
+    fn with_clamped_theta(self, theta: &[f64]) -> Self
+    where Self: Sized;
+
     // Get the theta bounds for tuning (log-transformed).
     fn bounds(&self) -> Vec<(f64, f64)>;
 }
@@ -64,6 +70,19 @@ impl<A: PartialOrd + Clone> BoundedValue<A> where A: PartialEq + Copy {
     /// Set a new value.
     pub fn with_value(self, value: A) -> Result<Self, BoundsError<A>> {
         Self::new(value, self.min, self.max)
+    }
+
+    /// Set a new value. If bounds are violated, substitute the bound instead.
+    pub fn with_clamped_value(self, value: A) -> Self {
+        let value =
+            if value < self.min {
+                self.min
+            } else if self.max < value {
+                self.max
+            } else {
+                value
+            };
+        Self { value, min: self.min, max: self.max }
     }
 }
 
@@ -121,16 +140,28 @@ impl Kernel for ConstantKernel {
     }
 
     fn with_theta(self, theta: &[f64]) -> Result<Self, BoundsError<f64>> {
-        let constant = match theta {
-            [constant] => constant.exp(),
-            _ => panic!("theta slice must contain exactly one value"),
-        };
-        let constant = self.constant.with_value(constant)?;
+        let constant = unpack_theta_one(theta)
+            .expect("theta slice must contain exactly one value");
+        let constant = self.constant.with_value(constant.exp())?;
         Ok(Self::new(constant))
+    }
+
+    fn with_clamped_theta(self, theta: &[f64]) -> Self {
+        let constant = unpack_theta_one(theta)
+            .expect("theta slice must contain exactly one value");
+        let constant = self.constant.with_clamped_value(constant.exp());
+        Self::new(constant)
     }
 
     fn bounds(&self) -> Vec<(f64, f64)> {
         vec![(self.constant.min().ln(), self.constant.max().ln())]
+    }
+}
+
+fn unpack_theta_one(theta: &[f64]) -> Option<f64> {
+    match *theta {
+        [value] => Some(value),
+        _ => None,
     }
 }
 
@@ -255,6 +286,18 @@ impl Kernel for Matern {
             .collect::<Result<_, _>>()?;
 
         Ok(Self::new(self.nu, length_scale))
+    }
+
+    fn with_clamped_theta(self, theta: &[f64]) -> Self {
+        assert!(theta.len() == self.n_params());
+
+        let length_scale = theta.iter().cloned()
+            .map(f64::exp)
+            .zip(self.length_scale)
+            .map(|(value, bounded)| bounded.with_clamped_value(value))
+            .collect::<Vec<_>>();
+
+        Self::new(self.nu, length_scale)
     }
 
     fn bounds(&self) -> Vec<(f64, f64)> {
@@ -393,6 +436,14 @@ where K1: Kernel,
         let k1 = self.k1.with_theta(theta1)?;
         let k2 = self.k2.with_theta(theta2)?;
         Ok(Self::of(k1, k2))
+    }
+
+    fn with_clamped_theta(self, theta: &[f64]) -> Self {
+        assert_eq!(theta.len(), self.n_params());
+        let (theta1, theta2) = theta.split_at(self.k1.n_params());
+        let k1 = self.k1.with_clamped_theta(theta1);
+        let k2 = self.k2.with_clamped_theta(theta2);
+        Self::of(k1, k2)
     }
 
     fn bounds(&self) -> Vec<(f64, f64)> {
