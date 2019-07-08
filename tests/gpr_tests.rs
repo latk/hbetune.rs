@@ -118,7 +118,7 @@ speculate! {
                 let ys = array![1.0, 2.0, 1.5];
                 let space = make_space();
                 let config = ggtune::ConfigGPR::new(&space)
-                    .noise_bounds(1e-3, 1e0)
+                    .noise_bounds(1e-5, 1e0)
                     .length_scale_bounds(vec![(0.1, 1.0)]);
                 let model = SurrogateModelGPR::estimate(
                     xs, ys, space,

@@ -157,9 +157,16 @@ where A: Scalar,
         let min_noise = A::from_f(1e-5);
         // y_var = diag(kernel(X)) + min_noise - einsum("ki,kj,ij->k", k_trans, k_trans, k_inv)
         // y_var[k] = diag(kernel(X))[k] + min_noise - sum(outer(k_trans[k], k_trans[k]) * k_inv)
+        // hmm, but sklearn has this:
+        // y_var[k] = diag(kernel(X))[k] - sum(for<i> dot(k_trans, k_inv)[i] * k_trans[i])
         let mut y_var = kernel.diag(x.view())
             + min_noise
-            - einsum_ki_kj_ij_to_k(k_trans.view(), k_trans.view(), k_inv);
+            - Array::from_iter(
+                k_trans.dot(&k_inv).outer_iter()
+                    .zip(k_trans.outer_iter())
+                    .map(|(a,b)| a.dot(&b))
+            );
+
 
         if let Some(elements_below_threshold) =
             clamp_negative_variance(y_var.view_mut(), -min_noise.sqrt())
@@ -191,49 +198,19 @@ speculate! {
             // precompute stuff
             let (_noise, alpha, k_inv, _lml) = fit_kernel(
                 &mut kernel, xs.clone(), ys.clone(), &mut rng, N_RESTARTS_OPTIMIZER,
-                BoundedValue::new(1.0, 0.001, 2.0).unwrap(),
+                BoundedValue::new(1.0, 0.001, 1.0).unwrap(),
             ).expect("fit_kernel() should succeed");
+            eprintln!("fitted kernel {:?} noise {:?}", kernel, _noise);
 
             // perform prediction
             let predict_xs = array![[0.0],[0.25],[0.5],[0.75],[1.0]];
-            let mut variances = array![0.0, 0.0, 0.0, 0.0, 0.0];
+            let mut variances = Array1::zeros(5);
             let prediction = basic_predict(
                 &kernel, alpha.view(), predict_xs.view(), xs.view(), k_inv.view(),
                 Some(variances.view_mut()));
 
             assert_all_close!(prediction, array![0.0, 0.5, 1.0, 1.5, 2.0], 0.1);
-            // assert_all_close!(variances, array![0.1, 0.1, 0.1], 0.05);
-        }
-    }
-}
-
-/// einsum("ki,kj,ij->k", a, b, c)
-fn einsum_ki_kj_ij_to_k<A>(a: ArrayView2<A>, b: ArrayView2<A>, c: ArrayView2<A>) -> Array1<A>
-where A: ndarray::NdFloat
-{
-    assert_eq!(a.rows(), b.rows());
-    assert_eq!(a.cols(), c.rows());
-    assert_eq!(b.cols(), c.cols());
-    let mut out = Array::zeros(a.rows());
-    for k in 0..a.rows() {
-        for i in 0..a.cols() {
-            for j in 0..b.cols() {
-                out[k] += a[[k,i]] * b[[k,j]] * c[[i,j]];
-            }
-        }
-    }
-    out
-}
-
-#[cfg(test)]
-speculate::speculate! {
-    describe "fn einsum_ki_kj_ij_to_k()" {
-        it "matches the Python implementation" {
-            let a = array![[1.,2.],[3.,4.],[5.,6.]];
-            let b = array![[3.,4.,3.],[5.,6.,7.],[1.,2.,4.]];
-            let c = array![[0.,2.,3.],[7.,8.,9.]];
-            let expected = array![177.,683.,434.];  // calculated with numpy
-            assert_eq!(einsum_ki_kj_ij_to_k(a.view(), b.view(), c.view()), expected);
+            assert_all_close!(variances, Array1::from_elem(5, 0.03), 0.03);
         }
     }
 }
