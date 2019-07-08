@@ -191,8 +191,10 @@ impl Matern {
 
 impl Kernel for Matern {
     fn kernel<A: Scalar>(&self, x1: ArrayView2<A>, x2: ArrayView2<A>) -> Array2<A> {
-        assert_eq!(x1.cols(), self.n_params());
-        assert_eq!(x2.cols(), self.n_params());
+        assert_eq!(x1.cols(), self.n_params(),
+                   "number of x1 columns must match number of features");
+        assert_eq!(x2.cols(), self.n_params(),
+                   "number of x2 columns must match number of features");
 
         // normalize the arrays via their length scale
         let length_scale = self.length_scale_array().mapv(A::from_f);
@@ -306,6 +308,7 @@ impl Kernel for Matern {
 }
 
 #[cfg(test)] speculate::speculate! {
+
     describe "Matern kernel" {
 
         it "produces a kernel and gradient with nu = 3/2" {
@@ -338,8 +341,9 @@ impl Kernel for Matern {
                  [ 0.        ,  0.        ]]];
 
             let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
-            assert_all_close!(actual_kernel, kernel_matrix, 0.001);
+            assert_all_close!(&actual_kernel, &kernel_matrix, 0.001);
             assert_all_close!(actual_gradient, gradient_matrix, 0.001);
+            assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);
         }
 
         it "produces a kernel and gradient with nu = 5/2" {
@@ -372,11 +376,57 @@ impl Kernel for Matern {
                  [ 0.        ,  0.        ]]];
 
             let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
-            assert_all_close!(actual_kernel, kernel_matrix, 0.001);
+            assert_all_close!(&actual_kernel, &kernel_matrix, 0.001);
             assert_all_close!(actual_gradient, gradient_matrix, 0.001);
+            assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);
         }
 
     }
+
+    describe "Product kernel" {
+        it "produces a kernel and gradient" {
+            let kernel = Product::of(
+                ConstantKernel::new(
+                    BoundedValue::new(2.0, 1.0, 5.0).unwrap(),
+                ),
+                Matern::new(
+                    2.5,
+                    vec![
+                        BoundedValue::new(1.0, 0.05, 20.0).unwrap(),
+                        BoundedValue::new(1.0, 0.05, 20.0).unwrap(),
+                    ],
+                ),
+            );
+
+            let x = array![
+                [0.5, 7.8],
+                [3.3, 1.4],
+                [3.9, 5.6],
+            ];
+
+            // produced by sklearn
+            let kernel_matrix = array![[  2.00000000e+00,   3.22221679e-05,   8.73105609e-03],
+                                       [  3.22221679e-05,   2.00000000e+00,   6.14136045e-03],
+                                       [  8.73105609e-03,   6.14136045e-03,   2.00000000e+00]];
+
+            // produced by sklearn
+            let gradient_matrix = array![[[  2.00000000e+00,   0.00000000e+00,   0.00000000e+00],
+                                          [  3.22221679e-05,   7.14401245e-05,   3.73238201e-04],
+                                          [  8.73105609e-03,   4.52409267e-02,   1.89417029e-02]],
+                                         [[  3.22221679e-05,   7.14401245e-05,   3.73238201e-04],
+                                          [  2.00000000e+00,   0.00000000e+00,   0.00000000e+00],
+                                          [  6.14136045e-03,   9.54435058e-04,   4.67673178e-02]],
+                                         [[  8.73105609e-03,   4.52409267e-02,   1.89417029e-02],
+                                          [  6.14136045e-03,   9.54435058e-04,   4.67673178e-02],
+                                          [  2.00000000e+00,   0.00000000e+00,   0.00000000e+00]]];
+
+            let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
+            assert_all_close!(&actual_kernel, &kernel_matrix, 1e-3);
+            assert_all_close!(actual_gradient, gradient_matrix, 1e-3);
+            assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);
+        }
+    }
+
 }
 
 /// A product of two kernels `k1 * k2`
@@ -416,7 +466,7 @@ where K1: Kernel,
     }
 
     fn diag<A: Scalar>(&self, x: ArrayView2<A>) -> Array1<A> {
-        self.k1.diag(x) * self.k1.diag(x)
+        self.k1.diag(x) * self.k2.diag(x)
     }
 
     fn n_params(&self) -> usize {
