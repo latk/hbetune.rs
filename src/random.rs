@@ -2,12 +2,12 @@ extern crate rand_core;
 extern crate rand;
 extern crate rand_xoshiro;
 // use rand_xoshiro::rand_core::SeedableRng;
-use rand_core::{SeedableRng, RngCore};
-use rand::Rng;
-use rand::distributions::{self, Distribution};
+use rand_core::SeedableRng;
+use rand::distributions::{self, Distribution as _};
 
 type BasicRNG = rand_xoshiro::Xoshiro256StarStar;
 
+#[derive(Debug, Clone)]
 pub struct RNG {
     basic_rng: BasicRNG,
 }
@@ -29,5 +29,9 @@ impl RNG {
     where T: rand::distributions::uniform::SampleUniform
     {
         distributions::Uniform::new_inclusive(lo, hi).sample(self.basic_rng_mut())
+    }
+
+    pub fn normal(&mut self, mean: f64, std: f64) -> f64 {
+        distributions::Normal::new(mean, std).sample(self.basic_rng_mut())
     }
 }

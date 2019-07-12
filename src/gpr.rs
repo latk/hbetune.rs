@@ -53,7 +53,7 @@ use crate::surrogate_model::SurrogateModel;
 
 type ConcreteKernel = Product<ConstantKernel, Matern>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SurrogateModelGPR<A: Scalar> {
     kernel: ConcreteKernel,
     noise: BoundedValue<f64>,
@@ -314,7 +314,7 @@ fn get_kernel_or_default<'a, A: Scalar>(
     Ok((kernel, noise))
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct YNormalization<A: Scalar> {
     amplitude: A,
     expected: A,
@@ -418,7 +418,7 @@ fn fit_kernel<A: Scalar>(
     let capture: std::cell::RefCell<Option<Capture<A>>> = None.into();
     let obj_func = |theta: &[f64], want_gradient: Option<&mut [f64]>, _: &mut ()| -> f64 {
         let (noise_theta, kernel_theta) = theta.split_first().unwrap();
-        let kernel = kernel.clone().with_theta(kernel_theta).unwrap();
+        let kernel = kernel.clone().with_clamped_theta(kernel_theta);
         let noise: A = A::from_f(noise_theta.exp());
 
         let (lml, lml_grad, alpha, factorization) =

@@ -2,7 +2,7 @@ use ndarray::prelude::*;
 
 use crate::kernel::Scalar;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Space {
     params: Vec<Parameter>,
 }
@@ -57,7 +57,7 @@ impl Space {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Parameter {
     Real { name: String, lo: f64, hi: f64 },
 }
