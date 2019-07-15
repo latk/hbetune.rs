@@ -302,7 +302,7 @@ fn get_kernel_or_default<'a, A: Scalar>(
         .map_err(Error::NoiseBounds)?;
 
     let length_scale = config.length_scale_bounds.into_iter()
-        .map(|(lo, hi)| BoundedValue::new(1.0, lo, hi))
+        .map(|(lo, hi)| BoundedValue::new(((lo.ln() + hi.ln())/2.).exp(), lo, hi))
         .collect::<Result<_, _>>()
         .map_err(Error::LengthScaleBounds)?;
 
