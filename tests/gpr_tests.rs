@@ -6,7 +6,7 @@ extern crate speculate;
 
 use speculate::speculate;
 use ndarray::prelude::*;
-use ggtune::{SurrogateModel as _, SurrogateModelGPR, RNG, Space, ConfigGPR};
+use ggtune::{SurrogateModel as _, SurrogateModelGPR, RNG, Space, EstimatorGPR, Estimator as _};
 use itertools::Itertools as _;
 
 struct SimpleModel { model: SurrogateModelGPR<f64> }
@@ -70,12 +70,10 @@ speculate! {
                 let xs = array![0.1, 0.5, 0.5, 0.9].insert_axis(Axis(1));
                 let ys = array![1.0, 1.8, 2.2, 3.0];
                 let space = make_space();
-                let config = ggtune::ConfigGPR::new(&space);
-                let model = SurrogateModelGPR::estimate(
+                let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space).estimate(
                     xs, ys, space,
                     None,
                     &mut RNG::new_with_seed(123),
-                    config,
                 ).unwrap();
                 SimpleModel { model }
             }
@@ -119,15 +117,14 @@ speculate! {
                 let xs = array![0.3, 0.5, 0.7].insert_axis(Axis(1));
                 let ys = array![1.0, 2.0, 1.5];
                 let space = make_space();
-                let config = ggtune::ConfigGPR::new(&space)
+                let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
                     .noise_bounds(1e-5, 1e0)
-                    .length_scale_bounds(vec![(0.1, 1.0)]);
-                let model = SurrogateModelGPR::estimate(
-                    xs, ys, space,
-                    None,
-                    &mut RNG::new_with_seed(9372),
-                    config,
-                ).unwrap();
+                    .length_scale_bounds(vec![(0.1, 1.0)])
+                    .estimate(
+                        xs, ys, space,
+                        None,
+                        &mut RNG::new_with_seed(9372),
+                    ).unwrap();
                 eprintln!("estimated mode: {:#?}", model);
                 SimpleModel { model }
             }
@@ -161,14 +158,13 @@ speculate! {
 
             let mut space = Space::new();
             space.add_real_parameter("x1", -2.0, 2.0);
-            let config = ggtune::ConfigGPR::new(&space)
+            let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
                 .length_scale_bounds(vec![(1e-2, 1e1)])
-                .noise_bounds(1e-2, 1e1);
-            let model = SurrogateModelGPR::estimate(
-                xs.clone(), ys,
-                space, None, &mut RNG::new_with_seed(4531),
-                config,
-            ).unwrap();
+                .noise_bounds(1e-2, 1e1)
+                .estimate(
+                    xs.clone(), ys,
+                    space, None, &mut RNG::new_with_seed(4531),
+                ).unwrap();
             eprintln!("trained model: {:#?}", model);
 
             let check_predictions = |xs: &Array2<_>| {
@@ -309,14 +305,13 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         space.add_real_parameter("x", -2.0, 2.0);
         space.add_real_parameter("y", -2.0, 2.0);
 
-        let config = ConfigGPR::new(&space)
+        let model = <EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
             .length_scale_bounds(vec![(1e-2, 2e1); 2])
             .noise_bounds(1e-2, 1e1)
-            .n_restarts_optimizer(1);
-
-        let model = SurrogateModelGPR::estimate(
-            xs.clone(), ys, space, None, rng, config,
-        ).expect("model should train successfully");
+            .n_restarts_optimizer(1)
+            .estimate(
+                xs.clone(), ys, space, None, rng,
+            ).expect("model should train successfully");
 
         model
     }

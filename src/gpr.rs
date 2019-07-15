@@ -49,7 +49,7 @@ use crate::random::RNG;
 use crate::kernel::{Kernel, ConstantKernel, Matern, Product, BoundedValue, BoundsError, Scalar};
 use crate::space::Space;
 use crate::util::DisplayIter;
-use crate::surrogate_model::SurrogateModel;
+use crate::surrogate_model::{SurrogateModel, Estimator};
 
 type ConcreteKernel = Product<ConstantKernel, Matern>;
 
@@ -71,50 +71,11 @@ impl<A: Scalar> SurrogateModelGPR<A> {
 }
 
 impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
-    type Config = ConfigGPR;
-    type Error = Error;
 
     fn space(&self) -> &Space { &self.space }
 
     fn length_scales(&self) -> Vec<f64> {
         self.kernel.k2().length_scale().iter().map(BoundedValue::value).collect()
-    }
-
-    fn estimate(
-        x: Array2<A>,
-        y: Array1<A>,
-        space: Space,
-        prior: Option<&Self>,
-        rng: &mut RNG,
-        config: Self::Config,
-    ) -> Result<Self, Self::Error> {
-        let (n_observations, n_features) = x.dim();
-        assert!(y.len() == n_observations,
-                "expected y values for {} observations: {}", n_observations, y);
-        assert!(space.len() == n_features,
-                "number of parameters ({}) must equal number of features ({})",
-                space.len(), n_features);
-
-        let n_restarts_optimizer = config.n_restarts_optimizer;
-
-        let (y_train, y_norm) = YNormalization::to_normalized(y);
-        let x_train = space.into_transformed_a(x);
-
-        let amplitude = estimate_amplitude(y_train.view(), config.amplitude_bounds);
-
-        let (mut kernel, noise) = get_kernel_or_default(prior, amplitude, config)?;
-
-        let (noise, alpha, k_inv, lml) = fit_kernel(
-            &mut kernel, x_train.clone(), y_train.clone(),
-            &mut rng.fork_random_state(),
-            n_restarts_optimizer,
-            noise,
-        )?;
-
-        Ok(SurrogateModelGPR {
-            kernel, noise, x_train, y_train, alpha, k_inv,
-            y_norm, lml, space,
-        })
     }
 
     fn predict_mean_transformed(&self, x: Array2<A>) -> Array1<A> {
@@ -133,6 +94,63 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
 
         (self.y_norm.y_from_normalized(y),
          self.y_norm.y_std_from_normalized_variance(y_var))
+    }
+}
+
+impl<A: Scalar> Estimator<A> for EstimatorGPR {
+    type Model = SurrogateModelGPR<A>;
+    type Error = Error;
+
+    fn new(space: &Space) -> Self {
+        let noise_bounds = (1e-5, 1e5);
+        let length_scale_bounds = std::iter::repeat((1e-3, 1e3)).take(space.len()).collect();
+        let n_restarts_optimizer = 2;
+        let matern_nu = 5./2.;
+        let amplitude_bounds = None;
+        EstimatorGPR {
+            noise_bounds,
+            length_scale_bounds,
+            n_restarts_optimizer,
+            matern_nu,
+            amplitude_bounds,
+        }
+    }
+
+    fn estimate(
+        &self,
+        x: Array2<A>,
+        y: Array1<A>,
+        space: Space,
+        prior: Option<&Self::Model>,
+        rng: &mut RNG,
+    ) -> Result<Self::Model, Self::Error> {
+        let (n_observations, n_features) = x.dim();
+        assert!(y.len() == n_observations,
+                "expected y values for {} observations: {}", n_observations, y);
+        assert!(space.len() == n_features,
+                "number of parameters ({}) must equal number of features ({})",
+                space.len(), n_features);
+
+        let n_restarts_optimizer = self.n_restarts_optimizer;
+
+        let (y_train, y_norm) = YNormalization::to_normalized(y);
+        let x_train = space.into_transformed_a(x);
+
+        let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
+
+        let (mut kernel, noise) = get_kernel_or_default(prior, amplitude, self)?;
+
+        let (noise, alpha, k_inv, lml) = fit_kernel(
+            &mut kernel, x_train.clone(), y_train.clone(),
+            &mut rng.fork_random_state(),
+            n_restarts_optimizer,
+            noise,
+        )?;
+
+        Ok(SurrogateModelGPR {
+            kernel, noise, x_train, y_train, alpha, k_inv,
+            y_norm, lml, space,
+        })
     }
 }
 
@@ -244,7 +262,7 @@ fn clamp_negative_variance<A: Scalar>(mut variances: ArrayViewMut1<A>, warning_l
 }
 
 #[derive(Debug)]
-pub struct ConfigGPR {
+pub struct EstimatorGPR {
     noise_bounds: (f64, f64),
     length_scale_bounds: Vec<(f64, f64)>,
     n_restarts_optimizer: usize,
@@ -252,47 +270,32 @@ pub struct ConfigGPR {
     amplitude_bounds: Option<(f64, f64)>,
 }
 
-impl ConfigGPR {
-    pub fn new(space: &Space) -> Self {
-        let noise_bounds = (1e-5, 1e5);
-        let length_scale_bounds = std::iter::repeat((1e-3, 1e3)).take(space.len()).collect();
-        let n_restarts_optimizer = 2;
-        let matern_nu = 5./2.;
-        let amplitude_bounds = None;
-        ConfigGPR {
-            noise_bounds,
-            length_scale_bounds,
-            n_restarts_optimizer,
-            matern_nu,
-            amplitude_bounds,
-        }
-    }
-
+impl EstimatorGPR {
     pub fn noise_bounds(self, lo: f64, hi: f64) -> Self {
-        ConfigGPR { noise_bounds: (lo, hi), ..self }
+        EstimatorGPR { noise_bounds: (lo, hi), ..self }
     }
 
     pub fn length_scale_bounds(self, bounds: Vec<(f64, f64)>) -> Self {
-        ConfigGPR { length_scale_bounds: bounds, ..self }
+        EstimatorGPR { length_scale_bounds: bounds, ..self }
     }
 
     pub fn n_restarts_optimizer(self, n: usize) -> Self {
-        ConfigGPR { n_restarts_optimizer: n, ..self }
+        EstimatorGPR { n_restarts_optimizer: n, ..self }
     }
 
     pub fn matern_nu(self, nu: f64) -> Self {
-        Self { matern_nu: nu, ..self }
+        EstimatorGPR { matern_nu: nu, ..self }
     }
 
     pub fn amplitude_bounds(self, bounds: Option<(f64, f64)>) -> Self {
-        Self { amplitude_bounds: bounds, ..self }
+        EstimatorGPR { amplitude_bounds: bounds, ..self }
     }
 }
 
 fn get_kernel_or_default<'a, A: Scalar>(
     prior: Option<&SurrogateModelGPR<A>>,
     amplitude: BoundedValue<f64>,
-    config: ConfigGPR,
+    config: &EstimatorGPR,
 ) -> Result<(ConcreteKernel, BoundedValue<f64>), Error> {
     if let Some(prior) = prior {
         return Ok((prior.kernel.clone(), prior.noise.clone()))
@@ -301,8 +304,8 @@ fn get_kernel_or_default<'a, A: Scalar>(
     let noise = BoundedValue::new(1.0, config.noise_bounds.0, config.noise_bounds.1)
         .map_err(Error::NoiseBounds)?;
 
-    let length_scale = config.length_scale_bounds.into_iter()
-        .map(|(lo, hi)| BoundedValue::new(((lo.ln() + hi.ln())/2.).exp(), lo, hi))
+    let length_scale = config.length_scale_bounds.iter()
+        .map(|&(lo, hi)| BoundedValue::new(((lo.ln() + hi.ln())/2.).exp(), lo, hi))
         .collect::<Result<_, _>>()
         .map_err(Error::LengthScaleBounds)?;
 

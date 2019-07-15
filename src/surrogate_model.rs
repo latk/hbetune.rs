@@ -4,11 +4,28 @@ use crate::random::RNG;
 use crate::space::Space;
 use crate::kernel::Scalar;
 
+/// An estimator that creates a SurrogateModel
+pub trait Estimator<A: Scalar> {
+    type Model: SurrogateModel<A>;
+    type Error;
+
+    /// Create a default estimator
+    fn new(space: &Space) -> Self;
+
+    /// Fit a new model to the given data.
+    fn estimate(
+        &self,
+        x: Array2<A>,
+        y: Array1<A>,
+        space: Space,
+        prior: Option<&Self::Model>,
+        rng: &mut RNG,
+    ) -> Result<Self::Model, Self::Error>;
+}
+
 /// A regression model to predict the value of points.
 /// This is used to guide the acquisition of new samples.
 pub trait SurrogateModel<A: Scalar> {
-    type Config;
-    type Error;
 
     /// Parameter space for the model
     fn space(&self) -> &Space;
@@ -20,17 +37,6 @@ pub trait SurrogateModel<A: Scalar> {
     fn length_scales(&self) -> Vec<f64> {
         vec![1.0; self.space().len()]
     }
-
-    /// Fit a new model to the given data.
-    fn estimate(
-        x: Array2<A>,
-        y: Array1<A>,
-        space: Space,
-        prior: Option<&Self>,
-        rng: &mut RNG,
-        config: Self::Config,
-    ) -> Result<Self, Self::Error>
-    where Self: Sized;
 
     fn predict_mean(&self, x: Array1<A>) -> A {
         self.predict_mean_a(x.insert_axis(Axis(0))).first().cloned().unwrap()

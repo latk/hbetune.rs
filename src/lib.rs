@@ -12,8 +12,10 @@ extern crate openblas_src;
 #[macro_use]mod macros;
 mod util;
 
+mod acquisition;
 mod gpr;
 mod hierarchical;
+mod individual;
 mod kernel;
 mod knn;
 mod minimize;
@@ -24,7 +26,7 @@ mod surrogate_model;
 
 pub mod benchfn;
 
-pub use surrogate_model::SurrogateModel;
-pub use gpr::{SurrogateModelGPR, ConfigGPR};
+pub use surrogate_model::{SurrogateModel, Estimator};
+pub use gpr::{SurrogateModelGPR, EstimatorGPR};
 pub use space::Space;
 pub use random::RNG;
