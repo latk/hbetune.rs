@@ -284,7 +284,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     fn generate_training_set(training_set: &str, rng: &mut RNG) -> Array2<f64> {
         match training_set {
             "randomTraining" =>
-                Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0, 2.0)),
+                Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0 ..= 2.0)),
             "gridTraining" => {
                 const SIZE: usize = 7;
                 let gridaxis = Array::linspace(-2.0, 2.0, SIZE);
@@ -332,9 +332,9 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         "selftest" => xs.clone(),
         "newsample" => Array::from_shape_fn((25, 2), |(i, _)| {
             if i < 15 {
-                rng.uniform(-2.0, 2.0)
+                rng.uniform(-2.0 ..= 2.0)
             } else {
-                rng.uniform(-1.0, 1.0)
+                rng.uniform(-1.0 ..= 1.0)
             }
         }),
         _ => unimplemented!("{}", testmode),

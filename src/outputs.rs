@@ -8,16 +8,16 @@ use crate::space::Space;
 pub trait OutputEventHandler<A> {
 
     /// Called when a new generation is started.
-    fn event_new_generation(&mut self, gen: usize, relscale: &[f64]) {}
+    fn event_new_generation(&mut self, _gen: usize, _relscale: &[f64]) {}
 
     /// Called when evaluations of a generation has completed.
-    fn event_evaluations_completed(&mut self, individuals: &[Individual<A>], duration: Duration) {}
+    fn event_evaluations_completed(&mut self, _individuals: &[Individual<A>], _duration: Duration) {}
 
     /// Called when a new model has been trained
-    fn event_model_trained(&mut self, gen: usize, model: &dyn SurrogateModel<A>, duration: Duration) {}
+    fn event_model_trained(&mut self, _gen: usize, _model: &dyn SurrogateModel<A>, _duration: Duration) {}
 
     /// Called when new samples have been acquired.
-    fn event_acquisition_completed(&mut self, duration: Duration) {}
+    fn event_acquisition_completed(&mut self, _duration: Duration) {}
 }
 
 pub struct CompositeOutputEventHandler<A> {

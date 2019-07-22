@@ -14,6 +14,7 @@ openblas-src = "0.7.0"
 nlopt = "0.5.1"
 itertools = "0.8.0"
 lazy_static = "1.3.0"
+rayon = "1.1"
 
 # the rand crates must share a common rand_core version,
 # which prevents us from always using the lastest

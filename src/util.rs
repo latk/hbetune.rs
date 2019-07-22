@@ -15,7 +15,7 @@ where F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
     let mut bestx = x.to_vec();
     for _ in 0..restarts {
         for (x, &(lo, hi)) in x.iter_mut().zip(bounds) {
-            *x = rng.uniform(lo, hi);
+            *x = rng.uniform(lo ..= hi);
         }
         let f = minimize_by_gradient(objective, x, bounds, data.clone());
         if f < bestf {
@@ -101,4 +101,20 @@ where I::Item: std::fmt::LowerExp
         }
         write!(fmt, "]")
     }
+}
+
+pub(crate) fn clip<T: PartialOrd>(value: T, min: Option<T>, max: Option<T>) -> T {
+    if let Some(min) = min {
+        if value < min {
+            return min;
+        }
+    }
+
+    if let Some(max) = max {
+        if max < value {
+            return max;
+        }
+    }
+
+    value
 }

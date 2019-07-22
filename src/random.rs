@@ -25,10 +25,11 @@ impl RNG {
 
     pub fn basic_rng_mut(&mut self) -> &mut BasicRNG { &mut self.basic_rng }
 
-    pub fn uniform<T>(&mut self, lo: T, hi: T) -> T
-    where T: rand::distributions::uniform::SampleUniform
+    pub fn uniform<T, Range>(&mut self, range: Range) -> T
+    where Range: Into<rand::distributions::Uniform<T>>,
+          T: rand::distributions::uniform::SampleUniform,
     {
-        distributions::Uniform::new_inclusive(lo, hi).sample(self.basic_rng_mut())
+        range.into().sample(self.basic_rng_mut())
     }
 
     pub fn normal(&mut self, mean: f64, std: f64) -> f64 {
