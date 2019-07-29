@@ -9,6 +9,7 @@ extern crate openblas_src;
 #[cfg(test)] extern crate speculate;
 #[macro_use] extern crate itertools;
 extern crate rayon;
+extern crate statrs;
 
 #[macro_use]mod macros;
 mod util;

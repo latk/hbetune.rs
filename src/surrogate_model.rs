@@ -39,24 +39,35 @@ pub trait SurrogateModel<A: Scalar> {
     }
 
     fn predict_mean(&self, x: Array1<A>) -> A {
-        self.predict_mean_a(x.insert_axis(Axis(0))).first().cloned().unwrap()
+        let xt = self.space().into_transformed(x);
+        self.predict_mean_transformed(xt)
     }
 
     fn predict_mean_std(&self, x: Array1<A>) -> (A, A) {
-        let (mean, std) = self.predict_mean_std_a(x.insert_axis(Axis(0)));
-        (mean.first().cloned().unwrap(), std.first().cloned().unwrap())
+        let xt = self.space().into_transformed(x);
+        self.predict_mean_std_transformed(xt)
     }
 
     fn predict_mean_a(&self, x: Array2<A>) -> Array1<A> {
         let xt = self.space().into_transformed_a(x);
-        self.predict_mean_transformed(xt)
+        self.predict_mean_transformed_a(xt)
     }
 
     fn predict_mean_std_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
         let xt = self.space().into_transformed_a(x);
-        self.predict_mean_std_transformed(xt)
+        self.predict_mean_std_transformed_a(xt)
     }
 
-    fn predict_mean_transformed(&self, x: Array2<A>) -> Array1<A>;
-    fn predict_mean_std_transformed(&self, x: Array2<A>) -> (Array1<A>, Array1<A>);
+    fn predict_mean_transformed(&self, x: Array1<A>) -> A {
+        let mean = self.predict_mean_transformed_a(x.insert_axis(Axis(0)));
+        *mean.first().unwrap()
+    }
+
+    fn predict_mean_std_transformed(&self, x: Array1<A>) -> (A, A) {
+        let (mean, std) = self.predict_mean_std_transformed_a(x.insert_axis(Axis(0)));
+        (*mean.first().unwrap(), *std.first().unwrap())
+    }
+
+    fn predict_mean_transformed_a(&self, x: Array2<A>) -> Array1<A>;
+    fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>);
 }

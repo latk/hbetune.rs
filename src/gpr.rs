@@ -78,7 +78,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         self.kernel.k2().length_scale().iter().map(BoundedValue::value).collect()
     }
 
-    fn predict_mean_transformed(&self, x: Array2<A>) -> Array1<A> {
+    fn predict_mean_transformed_a(&self, x: Array2<A>) -> Array1<A> {
         let y = basic_predict(
             &self.kernel, self.alpha.view(), x.view(), self.x_train.view(), self.k_inv.view(),
             None);
@@ -86,7 +86,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         self.y_norm.y_from_normalized(y)
     }
 
-    fn predict_mean_std_transformed(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
+    fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
         let mut y_var = Array1::zeros(x.rows());
         let y = basic_predict(
             &self.kernel, self.alpha.view(), x.view(), self.x_train.view(), self.k_inv.view(),

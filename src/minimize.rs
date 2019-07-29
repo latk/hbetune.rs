@@ -1,5 +1,4 @@
 use crate::acquisition::{AcquisitionStrategy, MutationAcquisition};
-use crate::gpr::{SurrogateModelGPR, EstimatorGPR};
 use crate::individual::Individual;
 use crate::kernel::Scalar;
 use crate::outputs::{OutputEventHandler, Output};
@@ -294,6 +293,7 @@ where Estimator: ModelEstimator<A>,
 
             let mut offspring = self.acquire(
                 population.as_slice(), &model, rng, fmin, relscale.as_slice());
+            assert_eq!(population.len(), offspring.len());
 
             self.evaluate_all(offspring.as_mut_slice(), rng, generation.into());
             budget = budget.saturating_sub(offspring.len());
@@ -320,7 +320,9 @@ where Estimator: ModelEstimator<A>,
     }
 
     fn make_initial_population(&self, rng: &mut RNG) -> Vec<Individual<A>> {
-        unimplemented!("MinimizationInstance::make_initial_population()")
+        std::iter::from_fn(|| Some(self.space.sample(rng)))
+            .take(self.config.initial)
+            .collect_vec()
     }
 
     fn evaluate_all(
