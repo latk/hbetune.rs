@@ -573,3 +573,16 @@ pub enum Error {
     NoiseBounds(BoundsError<f64>),
     LengthScaleBounds(BoundsError<f64>),
 }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            Error::NoiseBounds(BoundsError { value, min, max }) => write!(
+                f, "noise level {} violated bounds [{}, {}] during model fitting",
+                value, min, max),
+            Error::LengthScaleBounds(BoundsError { value, min, max }) => write!(
+                f, "length scale {} violated bounds [{}, {}] during model fitting",
+                value, min, max),
+        }
+    }
+}

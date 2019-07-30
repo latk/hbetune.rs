@@ -1,4 +1,4 @@
-use crate::{Individual, SurrogateModel, Space, RNG};
+use crate::{Individual, SurrogateModel, Space, RNG, Scalar};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
@@ -18,7 +18,7 @@ pub trait AcquisitionStrategy<A> {
         fmin: A,
         relscale: &[f64],
     ) -> Vec<Individual<A>>
-    where A: crate::kernel::Scalar;
+    where A: Scalar;
 }
 
 pub struct MutationAcquisition {
@@ -35,7 +35,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
         fmin: A,
         relscale: &[f64],
     ) -> Vec<Individual<A>>
-    where A: crate::kernel::Scalar
+    where A: Scalar
     {
         population.iter().map(|parent| {
             let parent_sample_transformed = space.into_transformed(parent.sample().to_owned());

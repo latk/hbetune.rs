@@ -1,10 +1,6 @@
-use crate::acquisition::{AcquisitionStrategy, MutationAcquisition};
-use crate::individual::Individual;
-use crate::kernel::Scalar;
-use crate::outputs::{OutputEventHandler, Output};
-use crate::random::RNG;
-use crate::space::Space;
-use crate::surrogate_model::{SurrogateModel, Estimator as ModelEstimator};
+use crate::{Individual, Scalar, OutputEventHandler, Output, RNG, Space};
+use crate::{SurrogateModel, Estimator as ModelEstimator};
+use crate::{AcquisitionStrategy, MutationAcquisition};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 use std::iter::FromIterator as _;
@@ -13,7 +9,18 @@ use std::cell::RefCell;
 
 type TimeSource = Fn() -> Instant;
 
-type ObjectiveFunction<A> = dyn Fn(ArrayView1<A>, &mut RNG) -> (A, A) + Sync;
+pub trait ObjectiveFunction<A>: Sync {
+    fn run<'a>(&self, xs: ArrayView1<'a, A>, rng: &'a mut RNG) -> (A, A);
+}
+
+impl<A, F> ObjectiveFunction<A> for F
+where F: Fn(ArrayView1<A>) -> A + Sync,
+      A: Default,
+{
+    fn run<'a>(&self, xs: ArrayView1<'a, A>, _rng: &'a mut RNG) -> (A, A) {
+        (self(xs), Default::default())
+    }
+}
 
 pub struct OptimizationResult<A, Model> {
     all_individuals: Vec<Individual<A>>,
@@ -167,14 +174,12 @@ where Estimator: ModelEstimator<A>,
     /// and declare the -1th generation.
     pub fn minimize(
         mut self,
-        objective: Box<ObjectiveFunction<A>>,
+        objective: &dyn ObjectiveFunction<A>,
         space: Space,
         rng: &mut RNG,
         outputs: Option<Box<dyn OutputEventHandler<A>>>,
         historic_individuals: impl IntoIterator<Item = Individual<A>>,
-    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error>
-    where Estimator::Model: Clone
-    {
+    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
         assert!(self.initial + self.popsize <= self.max_nevals,
                 "evaluation budget {max_nevals} too small with {initial}+n*{popsize} evaluations",
                 max_nevals = self.max_nevals, initial = self.initial, popsize = self.popsize);
@@ -207,23 +212,25 @@ where Estimator: ModelEstimator<A>,
             estimator,
         };
 
-        instance.run(rng, historic_individuals)
+        let result = instance.run(rng, historic_individuals);
+
+        result
     }
 }
 
-struct MinimizationInstance<A, Estimator>
+struct MinimizationInstance<'life, A, Estimator>
 where Estimator: ModelEstimator<A>,
       A: Scalar,
 {
     config: Minimizer<A, Estimator>,
-    objective: Box<ObjectiveFunction<A>>,
+    objective: &'life dyn ObjectiveFunction<A>,
     space: Space,
     outputs: RefCell<Box<dyn OutputEventHandler<A>>>,
     acquisition_strategy: Box<dyn AcquisitionStrategy<A>>,
     estimator: Estimator,
 }
 
-impl<A, Estimator> MinimizationInstance<A, Estimator>
+impl<'life, A, Estimator> MinimizationInstance<'life, A, Estimator>
 where Estimator: ModelEstimator<A>,
       A: Scalar,
 {
@@ -231,9 +238,7 @@ where Estimator: ModelEstimator<A>,
         &self,
         rng: &mut RNG,
         historic_individuals: Vec<Individual<A>>,
-    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error>
-    where Estimator::Model: Clone
-    {
+    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
         let config = &self.config;
 
         let total_duration = config.time_source.as_ref()();
@@ -332,7 +337,7 @@ where Estimator: ModelEstimator<A>,
         generation: u16,
     ) {
         let timer = self.config.time_source.as_ref()();
-        let objective = self.objective.as_ref();
+        let objective = self.objective;
 
         let rngs = individuals.iter()
             .map(|_| rng.fork_random_state())
@@ -341,7 +346,7 @@ where Estimator: ModelEstimator<A>,
         use rayon::prelude::*;
 
         individuals.par_iter_mut().zip(rngs).for_each(|(ind, mut rng): (&mut Individual<A>, _)| {
-            let (observation, cost) = objective(ind.sample(), &mut rng);
+            let (observation, cost) = objective.run(ind.sample(), &mut rng);
             ind.set_observation(observation).expect("observation was unset");
             ind.set_cost(cost).expect("cost was unset");
             ind.set_gen(generation.into()).expect("generation was unset");
@@ -462,7 +467,7 @@ struct FitnessOperator<'life, A>(&'life SurrogateModel<A>, UsePosterior);
 
 impl<'life, A> FitnessOperator<'life, A> {
     fn get_fitness(&self, ind: &Individual<A>) -> Option<A>
-    where A: crate::kernel::Scalar {
+    where A: Scalar {
         let &FitnessOperator(ref model, UsePosterior(use_posterior)) = self;
         if use_posterior {
             Some(model.predict_mean(ind.sample().to_owned()))
@@ -472,7 +477,7 @@ impl<'life, A> FitnessOperator<'life, A> {
     }
 
     fn compare(&self, a: &Individual<A>, b: &Individual<A>) -> Option<std::cmp::Ordering>
-    where A: PartialOrd + crate::kernel::Scalar {
+    where A: PartialOrd + Scalar {
         let a = self.get_fitness(a);
         let b = self.get_fitness(b);
         a.partial_cmp(&b)
@@ -491,7 +496,7 @@ fn select_next_population<A>(
     offspring: Vec<Individual<A>>,
     fitness: FitnessOperator<A>,
 ) -> (Vec<Individual<A>>, Vec<Individual<A>>)
-where A: crate::kernel::Scalar
+where A: Scalar
 {
     let mut selected = Vec::new();
     let mut rejected = Vec::new();

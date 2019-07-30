@@ -1,8 +1,6 @@
 use ndarray::prelude::*;
 
-use crate::kernel::Scalar;
-use crate::individual::Individual;
-use crate::random::RNG;
+use crate::{Scalar, Individual, RNG};
 
 /// The parameter space that contains feasible solutions.
 /// This space is usually handled in its natural units,

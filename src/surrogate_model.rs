@@ -1,13 +1,11 @@
 use ndarray::prelude::*;
 
-use crate::random::RNG;
-use crate::space::Space;
-use crate::kernel::Scalar;
+use crate::{RNG, Space, Scalar};
 
 /// An estimator that creates a SurrogateModel
 pub trait Estimator<A: Scalar> {
     type Model: SurrogateModel<A>;
-    type Error;
+    type Error: std::fmt::Display + std::fmt::Debug;
 
     /// Create a default estimator
     fn new(space: &Space) -> Self;

@@ -8,7 +8,7 @@ edition = "2018"
 ndarray = "0.12.1"  # like NumPy
 ndarray-linalg = { version = "0.11" }  # provides Cholesky decomposition
 ndarray-stats = "0.2.0"  # summary statistics
-noisy_float = "0.1.11"  # needed for quantiles
+noisy_float = "0.1.11"  # needed for quantiles and for convenient sorting
 num-traits = "0.2.8"  # provides traits that describe floatishness
 openblas-src = "0.7.0"  # statically link OpenBLAS
 nlopt = "0.5.1"  # for optimization algos, used for model fitting
@@ -16,7 +16,6 @@ itertools = "0.8.0"  # for convenient iteration
 lazy_static = "1.3.0"  # for convenient initialization
 rayon = "1.1"  # for simple multi-threading
 statrs = "0.11.0"  # for random distributions
-
 
 # the rand crates must share a common rand_core version,
 # which prevents us from always using the lastest

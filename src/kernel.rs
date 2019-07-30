@@ -1,5 +1,6 @@
 //! Adapted from the sklearn.gaussian_process.kernels Python module.
 
+use noisy_float::prelude::*;
 use ndarray::prelude::*;
 use num_traits::Float;
 
@@ -95,9 +96,9 @@ where A: PartialOrd + Clone + std::fmt::Debug {
 
 #[derive(Debug)]
 pub struct BoundsError<A> {
-    value: A,
-    min: A,
-    max: A,
+    pub value: A,
+    pub min: A,
+    pub max: A,
 }
 
 /// A constant kernel.
@@ -559,6 +560,7 @@ pub trait Scalar
 {
     fn from_f<F: Into<f64>>(x: F) -> Self;
     fn from_i(x: i16) -> Self { std::convert::From::from(x) }
+    fn to_n64(self) -> N64 { n64(self.into()) }
 }
 
 impl Scalar for f64 {
