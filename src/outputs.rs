@@ -1,20 +1,24 @@
-use std::time::Duration;
-use crate::surrogate_model::SurrogateModel;
+use crate::{Individual, Space, SurrogateModel};
 use std::boxed::Box;
-use crate::individual::Individual;
-use crate::space::Space;
+use std::time::Duration;
 
 /// Report progress and save results during optimization process.
 pub trait OutputEventHandler<A> {
-
     /// Called when a new generation is started.
     fn event_new_generation(&mut self, _gen: usize, _relscale: &[f64]) {}
 
     /// Called when evaluations of a generation has completed.
-    fn event_evaluations_completed(&mut self, _individuals: &[Individual<A>], _duration: Duration) {}
+    fn event_evaluations_completed(&mut self, _individuals: &[Individual<A>], _duration: Duration) {
+    }
 
     /// Called when a new model has been trained
-    fn event_model_trained(&mut self, _gen: usize, _model: &dyn SurrogateModel<A>, _duration: Duration) {}
+    fn event_model_trained(
+        &mut self,
+        _gen: usize,
+        _model: &dyn SurrogateModel<A>,
+        _duration: Duration,
+    ) {
+    }
 
     /// Called when new samples have been acquired.
     fn event_acquisition_completed(&mut self, _duration: Duration) {}
@@ -48,7 +52,12 @@ impl<A> OutputEventHandler<A> for CompositeOutputEventHandler<A> {
         }
     }
 
-    fn event_model_trained(&mut self, gen: usize, model: &dyn SurrogateModel<A>, duration: Duration) {
+    fn event_model_trained(
+        &mut self,
+        gen: usize,
+        model: &dyn SurrogateModel<A>,
+        duration: Duration,
+    ) {
         for logger in &mut self.subloggers {
             logger.event_model_trained(gen, model, duration);
         }
@@ -79,9 +88,17 @@ impl<A> Output<A> {
         }
     }
 
-    pub fn evaluation_durations(&self) -> &[Duration] { &self.evaluation_durations }
-    pub fn training_durations(&self) -> &[Duration] { &self.training_durations }
-    pub fn acquisition_durations(&self) -> &[Duration] { &self.acquisition_durations }
+    pub fn evaluation_durations(&self) -> &[Duration] {
+        &self.evaluation_durations
+    }
+
+    pub fn training_durations(&self) -> &[Duration] {
+        &self.training_durations
+    }
+
+    pub fn acquisition_durations(&self) -> &[Duration] {
+        &self.acquisition_durations
+    }
 }
 
 impl<A> OutputEventHandler<A> for Output<A> {
@@ -94,7 +111,12 @@ impl<A> OutputEventHandler<A> for Output<A> {
         self.base.event_evaluations_completed(individuals, duration);
     }
 
-    fn event_model_trained(&mut self, generation: usize, model: &dyn SurrogateModel<A>, duration: Duration) {
+    fn event_model_trained(
+        &mut self,
+        generation: usize,
+        model: &dyn SurrogateModel<A>,
+        duration: Duration,
+    ) {
         self.training_durations.push(duration);
         self.base.event_model_trained(generation, model, duration);
     }

@@ -1,21 +1,29 @@
 extern crate nlopt;
-#[cfg(test)] use speculate::speculate;
+
 use crate::random::RNG;
+
+#[cfg(test)]
+use speculate::speculate;
 
 type Bounds = (f64, f64);
 
 pub fn minimize_by_gradient_with_restarts<F, Data>(
-    objective: &F, x: &mut [f64], bounds: &[Bounds], data: Data,
-    restarts: usize, rng: &mut RNG,
+    objective: &F,
+    x: &mut [f64],
+    bounds: &[Bounds],
+    data: Data,
+    restarts: usize,
+    rng: &mut RNG,
 ) -> f64
-where F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
-      Data: Clone
+where
+    F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
+    Data: Clone,
 {
     let mut bestf = minimize_by_gradient(objective, x, bounds, data.clone());
     let mut bestx = x.to_vec();
     for _ in 0..restarts {
         for (x, &(lo, hi)) in x.iter_mut().zip(bounds) {
-            *x = rng.uniform(lo ..= hi);
+            *x = rng.uniform(lo..=hi);
         }
         let f = minimize_by_gradient(objective, x, bounds, data.clone());
         if f < bestf {
@@ -28,9 +36,13 @@ where F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
 }
 
 pub fn minimize_by_gradient<F, Data>(
-    objective: F, x: &mut [f64], bounds: &[Bounds], data: Data,
+    objective: F,
+    x: &mut [f64],
+    bounds: &[Bounds],
+    data: Data,
 ) -> f64
-where F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64
+where
+    F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
 {
     let (bounds_lo, bounds_hi): (Vec<f64>, Vec<f64>) = bounds.iter().cloned().unzip();
     let mut opt = nlopt::Nlopt::new(
@@ -43,7 +55,8 @@ where F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64
     opt.set_lower_bounds(bounds_lo.as_slice()).unwrap();
     opt.set_upper_bounds(bounds_hi.as_slice()).unwrap();
     opt.set_maxeval(150).unwrap();
-    match opt.optimize(x) {  // TODO check result properly
+    // TODO check result properly
+    match opt.optimize(x) {
         Ok((_, f)) => f,
         Err((_, f)) => f,
     }
@@ -85,7 +98,8 @@ impl<I: IntoIterator> From<I> for DisplayIter<I> {
 }
 
 impl<I: IntoIterator> std::fmt::LowerExp for DisplayIter<I>
-where I::Item: std::fmt::LowerExp
+where
+    I::Item: std::fmt::LowerExp,
 {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(fmt, "[")?;

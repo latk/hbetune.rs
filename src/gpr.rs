@@ -43,13 +43,13 @@ use ndarray::prelude::*;
 use ndarray_stats as ndstats;
 use noisy_float;
 use num_traits::Float;
-#[cfg(test)] use speculate::speculate;
 
-use crate::random::RNG;
-use crate::kernel::{Kernel, ConstantKernel, Matern, Product, BoundedValue, BoundsError, Scalar};
-use crate::space::Space;
+#[cfg(test)]
+use speculate::speculate;
+
+use crate::kernel::{BoundedValue, BoundsError, ConstantKernel, Kernel, Matern, Product};
 use crate::util::DisplayIter;
-use crate::surrogate_model::{SurrogateModel, Estimator};
+use crate::{Estimator, Scalar, Space, SurrogateModel, RNG};
 
 type ConcreteKernel = Product<ConstantKernel, Matern>;
 
@@ -67,21 +67,34 @@ pub struct SurrogateModelGPR<A: Scalar> {
 }
 
 impl<A: Scalar> SurrogateModelGPR<A> {
-    pub fn kernel(&self) -> &ConcreteKernel { &self.kernel }
+    pub fn kernel(&self) -> &ConcreteKernel {
+        &self.kernel
+    }
 }
 
 impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
-
-    fn space(&self) -> &Space { &self.space }
+    fn space(&self) -> &Space {
+        &self.space
+    }
 
     fn length_scales(&self) -> Vec<f64> {
-        self.kernel.k2().length_scale().iter().map(BoundedValue::value).collect()
+        self.kernel
+            .k2()
+            .length_scale()
+            .iter()
+            .map(BoundedValue::value)
+            .collect()
     }
 
     fn predict_mean_transformed_a(&self, x: Array2<A>) -> Array1<A> {
         let y = basic_predict(
-            &self.kernel, self.alpha.view(), x.view(), self.x_train.view(), self.k_inv.view(),
-            None);
+            &self.kernel,
+            self.alpha.view(),
+            x.view(),
+            self.x_train.view(),
+            self.k_inv.view(),
+            None,
+        );
 
         self.y_norm.y_from_normalized(y)
     }
@@ -89,11 +102,18 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
     fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
         let mut y_var = Array1::zeros(x.rows());
         let y = basic_predict(
-            &self.kernel, self.alpha.view(), x.view(), self.x_train.view(), self.k_inv.view(),
-            Some(y_var.view_mut()));
+            &self.kernel,
+            self.alpha.view(),
+            x.view(),
+            self.x_train.view(),
+            self.k_inv.view(),
+            Some(y_var.view_mut()),
+        );
 
-        (self.y_norm.y_from_normalized(y),
-         self.y_norm.y_std_from_normalized_variance(y_var))
+        (
+            self.y_norm.y_from_normalized(y),
+            self.y_norm.y_std_from_normalized_variance(y_var),
+        )
     }
 }
 
@@ -105,7 +125,7 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         let noise_bounds = (1e-5, 1e5);
         let length_scale_bounds = std::iter::repeat((1e-3, 1e3)).take(space.len()).collect();
         let n_restarts_optimizer = 2;
-        let matern_nu = 5./2.;
+        let matern_nu = 5. / 2.;
         let amplitude_bounds = None;
         EstimatorGPR {
             noise_bounds,
@@ -125,11 +145,18 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         rng: &mut RNG,
     ) -> Result<Self::Model, Self::Error> {
         let (n_observations, n_features) = x.dim();
-        assert!(y.len() == n_observations,
-                "expected y values for {} observations: {}", n_observations, y);
-        assert!(space.len() == n_features,
-                "number of parameters ({}) must equal number of features ({})",
-                space.len(), n_features);
+        assert!(
+            y.len() == n_observations,
+            "expected y values for {} observations: {}",
+            n_observations,
+            y,
+        );
+        assert!(
+            space.len() == n_features,
+            "number of parameters ({}) must equal number of features ({})",
+            space.len(),
+            n_features,
+        );
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
@@ -141,15 +168,24 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         let (mut kernel, noise) = get_kernel_or_default(prior, amplitude, self)?;
 
         let (noise, alpha, k_inv, lml) = fit_kernel(
-            &mut kernel, x_train.clone(), y_train.clone(),
+            &mut kernel,
+            x_train.clone(),
+            y_train.clone(),
             &mut rng.fork_random_state(),
             n_restarts_optimizer,
             noise,
         )?;
 
         Ok(SurrogateModelGPR {
-            kernel, noise, x_train, y_train, alpha, k_inv,
-            y_norm, lml, space,
+            kernel,
+            noise,
+            x_train,
+            y_train,
+            alpha,
+            k_inv,
+            y_norm,
+            lml,
+            space,
         })
     }
 }
@@ -162,9 +198,9 @@ fn basic_predict<A>(
     k_inv: ArrayView2<A>,
     want_variance: Option<ArrayViewMut1<A>>,
 ) -> Array1<A>
-where A: Scalar,
+where
+    A: Scalar,
 {
-
     let k_trans: Array2<A> = kernel.kernel(x.view(), x_train);
     let y = k_trans.dot(&alpha);
 
@@ -177,20 +213,22 @@ where A: Scalar,
         // y_var[k] = diag(kernel(X))[k] + min_noise - sum(outer(k_trans[k], k_trans[k]) * k_inv)
         // hmm, but sklearn has this:
         // y_var[k] = diag(kernel(X))[k] - sum(for<i> dot(k_trans, k_inv)[i] * k_trans[i])
-        let mut y_var = kernel.diag(x.view())
-            + min_noise
+        let mut y_var = kernel.diag(x.view()) + min_noise
             - Array::from_iter(
-                k_trans.dot(&k_inv).outer_iter()
+                k_trans
+                    .dot(&k_inv)
+                    .outer_iter()
                     .zip(k_trans.outer_iter())
-                    .map(|(a,b)| a.dot(&b))
+                    .map(|(a, b)| a.dot(&b)),
             );
-
 
         if let Some(elements_below_threshold) =
             clamp_negative_variance(y_var.view_mut(), -min_noise.sqrt())
         {
-            eprintln!("Variances below 0 were predicted and will be corrected: {:.2e}",
-                      DisplayIter::from(elements_below_threshold));
+            eprintln!(
+                "Variances below 0 were predicted and will be corrected: {:.2e}",
+                DisplayIter::from(elements_below_threshold),
+            );
         }
 
         variance_out.assign(&y_var);
@@ -236,16 +274,33 @@ speculate! {
 /// Check if any of the variances is negative because of numerical issues.
 /// If yes: set the variance to 0.
 /// But only warn on largeish differences.
-fn clamp_negative_variance<A: Scalar>(mut variances: ArrayViewMut1<A>, warning_level: A) -> Option<Vec<A>> {
-    let elements_below_threshold: Vec<_> =
-        variances.iter().cloned().filter(|x| *x < warning_level).collect();
-    let zero = A::zero();
-    variances.map_inplace(|x| if *x < zero { *x = zero });
+fn clamp_negative_variance<A: Scalar>(
+    mut variances: ArrayViewMut1<A>,
+    warning_level: A,
+) -> Option<Vec<A>> {
+    let elements_below_threshold: Vec<_> = variances
+        .iter()
+        .cloned()
+        .filter(|x| *x < warning_level)
+        .collect();
 
-    if elements_below_threshold.is_empty() { None } else { Some(elements_below_threshold) }
+    let zero = A::zero();
+
+    variances.map_inplace(|x| {
+        if *x < zero {
+            *x = zero;
+        }
+    });
+
+    if elements_below_threshold.is_empty() {
+        None
+    } else {
+        Some(elements_below_threshold)
+    }
 }
 
-#[cfg(test)] speculate! {
+#[cfg(test)]
+speculate! {
     describe "fn clamp_negative_variance()" {
         it "returns elements with very negative variances" {
             let mut variances = array![1., -2., -0.5];
@@ -272,23 +327,38 @@ pub struct EstimatorGPR {
 
 impl EstimatorGPR {
     pub fn noise_bounds(self, lo: f64, hi: f64) -> Self {
-        EstimatorGPR { noise_bounds: (lo, hi), ..self }
+        EstimatorGPR {
+            noise_bounds: (lo, hi),
+            ..self
+        }
     }
 
     pub fn length_scale_bounds(self, bounds: Vec<(f64, f64)>) -> Self {
-        EstimatorGPR { length_scale_bounds: bounds, ..self }
+        EstimatorGPR {
+            length_scale_bounds: bounds,
+            ..self
+        }
     }
 
     pub fn n_restarts_optimizer(self, n: usize) -> Self {
-        EstimatorGPR { n_restarts_optimizer: n, ..self }
+        EstimatorGPR {
+            n_restarts_optimizer: n,
+            ..self
+        }
     }
 
     pub fn matern_nu(self, nu: f64) -> Self {
-        EstimatorGPR { matern_nu: nu, ..self }
+        EstimatorGPR {
+            matern_nu: nu,
+            ..self
+        }
     }
 
     pub fn amplitude_bounds(self, bounds: Option<(f64, f64)>) -> Self {
-        EstimatorGPR { amplitude_bounds: bounds, ..self }
+        EstimatorGPR {
+            amplitude_bounds: bounds,
+            ..self
+        }
     }
 }
 
@@ -298,14 +368,16 @@ fn get_kernel_or_default<'a, A: Scalar>(
     config: &EstimatorGPR,
 ) -> Result<(ConcreteKernel, BoundedValue<f64>), Error> {
     if let Some(prior) = prior {
-        return Ok((prior.kernel.clone(), prior.noise.clone()))
+        return Ok((prior.kernel.clone(), prior.noise.clone()));
     }
 
     let noise = BoundedValue::new(1.0, config.noise_bounds.0, config.noise_bounds.1)
         .map_err(Error::NoiseBounds)?;
 
-    let length_scale = config.length_scale_bounds.iter()
-        .map(|&(lo, hi)| BoundedValue::new(((lo.ln() + hi.ln())/2.).exp(), lo, hi))
+    let length_scale = config
+        .length_scale_bounds
+        .iter()
+        .map(|&(lo, hi)| BoundedValue::new(((lo.ln() + hi.ln()) / 2.).exp(), lo, hi))
         .collect::<Result<_, _>>()
         .map_err(Error::LengthScaleBounds)?;
 
@@ -324,7 +396,9 @@ struct YNormalization<A: Scalar> {
 }
 
 impl<A: Scalar> YNormalization<A> {
-    fn fudge_min() -> A { A::from_f(0.05) }
+    fn fudge_min() -> A {
+        A::from_f(0.05)
+    }
 
     fn to_normalized(mut y: Array1<A>) -> (Array1<A>, Self) {
         use ndarray_stats::QuantileExt;
@@ -335,13 +409,23 @@ impl<A: Scalar> YNormalization<A> {
 
         // scale the values so that the mean is set to 1
         let amplitude = y.mean_axis(Axis(0)).into_scalar();
-        let amplitude = if amplitude <= A::from_f(0.0) { A::from_f(1.0) } else { amplitude };
+        let amplitude = if amplitude <= A::from_f(0.0) {
+            A::from_f(1.0)
+        } else {
+            amplitude
+        };
         y /= amplitude;
 
         // raise the minimum slightly above zero
         y += Self::fudge_min();
 
-        (y, Self { amplitude, expected })
+        (
+            y,
+            Self {
+                amplitude,
+                expected,
+            },
+        )
     }
 
     fn y_from_normalized(&self, mut y: Array1<A>) -> Array1<A> {
@@ -376,14 +460,18 @@ speculate! {
     }
 }
 
-fn estimate_amplitude<A: Scalar>(y: ArrayView1<A>, bounds: Option<(f64, f64)>) -> BoundedValue<f64> {
+fn estimate_amplitude<A: Scalar>(
+    y: ArrayView1<A>,
+    bounds: Option<(f64, f64)>,
+) -> BoundedValue<f64> {
     use ndstats::Quantile1dExt;
     use noisy_float::types::N64;
     let (lo, hi) = bounds.unwrap_or_else(|| {
         let hi = y.mapv(|x| x.powi(2)).sum().into();
         let lo = y
             .mapv(|x| N64::from_f64(x.into()))
-            .quantile_mut(N64::from_f64(0.1), &ndstats::interpolate::Lower).unwrap()
+            .quantile_mut(N64::from_f64(0.1), &ndstats::interpolate::Lower)
+            .unwrap()
             .raw()
             .powi(2)
             * y.len() as f64;
@@ -394,7 +482,8 @@ fn estimate_amplitude<A: Scalar>(y: ArrayView1<A>, bounds: Option<(f64, f64)>) -
     let start = Array1::from_vec(vec![lo, hi])
         .mapv_into(f64::ln)
         .mean_axis(Axis(0))
-        .into_scalar().exp();
+        .into_scalar()
+        .exp();
     BoundedValue::new(start, lo, hi).unwrap()
 }
 
@@ -402,8 +491,12 @@ fn estimate_amplitude<A: Scalar>(y: ArrayView1<A>, bounds: Option<(f64, f64)>) -
 ///
 /// The current kernel parameters (theta) are used as an optimization starting point.
 fn fit_kernel<A: Scalar>(
-    kernel: &mut impl Kernel, x_train: Array2<A>, y_train: Array1<A>,
-    rng: &mut RNG, n_restarts_optimizer: usize, noise: BoundedValue<f64>,
+    kernel: &mut impl Kernel,
+    x_train: Array2<A>,
+    y_train: Array1<A>,
+    rng: &mut RNG,
+    n_restarts_optimizer: usize,
+    noise: BoundedValue<f64>,
 ) -> Result<(BoundedValue<f64>, Array1<A>, Array2<A>, f64), Error> {
     let n_observations = x_train.rows();
     assert!(y_train.dim() == n_observations);
@@ -428,14 +521,19 @@ fn fit_kernel<A: Scalar>(
             match lml_with_gradients(kernel, noise, x_train.view(), y_train.view()) {
                 Some(result) => result,
                 None => {
-                    want_gradient.map(|grad| for g in grad { *g = 0.0 });
+                    want_gradient.map(|grad| {
+                        for g in grad {
+                            *g = 0.0;
+                        }
+                    });
                     return std::f64::INFINITY;
-                },
+                }
             };
 
         // capture optimal theta incl already computed matrices
-        if capture.borrow().as_ref().map(|cap| lml > cap.lml).unwrap_or(true) {
-            capture.replace(Some(Capture{
+        let caplml = capture.borrow().as_ref().map(|cap| cap.lml);
+        if caplml.map(|caplml| lml > caplml).unwrap_or(true) {
+            capture.replace(Some(Capture {
                 lml,
                 theta: kernel_theta.to_vec(),
                 noise: noise.into(),
@@ -468,10 +566,17 @@ fn fit_kernel<A: Scalar>(
         initial_theta.as_mut_slice(),
         bounds.as_slice(),
         (),
-        n_restarts_optimizer, rng);
+        n_restarts_optimizer,
+        rng,
+    );
 
-    let Capture { theta, noise: captured_noise, mat_k_factorization, alpha, lml } =
-        capture.replace(None).unwrap();
+    let Capture {
+        theta,
+        noise: captured_noise,
+        mat_k_factorization,
+        alpha,
+        lml,
+    } = capture.replace(None).unwrap();
 
     *kernel = kernel.clone().with_clamped_theta(theta.as_slice());
     let noise = noise.with_clamped_value(captured_noise);
@@ -482,7 +587,8 @@ fn fit_kernel<A: Scalar>(
     Ok((noise, alpha, mat_k_inv, lml))
 }
 
-type CholeskyFactorizedArray<A> = ndarray_linalg::cholesky::CholeskyFactorized<ndarray::OwnedRepr<A>>;
+type CholeskyFactorizedArray<A> =
+    ndarray_linalg::cholesky::CholeskyFactorized<ndarray::OwnedRepr<A>>;
 
 /// calculate the log marginal likelihood and gradients
 /// of a certain kernel/noise configuration
@@ -522,9 +628,10 @@ fn lml_with_gradients<A: Scalar>(
         // compute "0.5 * trace(tmp dot kernel_gradient)"
         // without constructing the full matrix
         // as only the diagonal is required
-        gradient.axis_iter(Axis(2)).map(
-            |grad| 0.5 * (&tmp * &grad).sum().into()
-        ).collect()
+        gradient
+            .axis_iter(Axis(2))
+            .map(|grad| 0.5 * (&tmp * &grad).sum().into())
+            .collect()
     };
 
     Some((lml, lml_gradient, alpha, factorization))
@@ -533,7 +640,9 @@ fn lml_with_gradients<A: Scalar>(
 fn outer<A: Scalar>(a: ArrayView1<A>, b: ArrayView1<A>) -> Array2<A> {
     // TODO find more idiomatic code
     // let mut out = Array::zeros((a.len(), b.len()));
-    let mut out = b.insert_axis(Axis(0)).broadcast((a.len(), b.len()))
+    let mut out = b
+        .insert_axis(Axis(0))
+        .broadcast((a.len(), b.len()))
         .expect("the b array can be broadcast")
         .to_owned();
     // let mut out = ndarray::stack(Axis(0), vec![b.broadcast(()); a.len()].as_slice()).unwrap();
@@ -578,11 +687,15 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             Error::NoiseBounds(BoundsError { value, min, max }) => write!(
-                f, "noise level {} violated bounds [{}, {}] during model fitting",
-                value, min, max),
+                f,
+                "noise level {} violated bounds [{}, {}] during model fitting",
+                value, min, max,
+            ),
             Error::LengthScaleBounds(BoundsError { value, min, max }) => write!(
-                f, "length scale {} violated bounds [{}, {}] during model fitting",
-                value, min, max),
+                f,
+                "length scale {} violated bounds [{}, {}] during model fitting",
+                value, min, max,
+            ),
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Adapted from the sklearn.gaussian_process.kernels Python module.
 
-use noisy_float::prelude::*;
 use ndarray::prelude::*;
+use noisy_float::prelude::*;
 use num_traits::Float;
 
 /// A kernel function that can be used in a Gaussian Process
@@ -29,13 +29,15 @@ pub trait Kernel: Clone + std::fmt::Debug {
     // Returns None if the theta is unacceptable, e.g. because it violates bounds.
     // Panics if the theta has wrong length – must equal n_params().
     fn with_theta(self, theta: &[f64]) -> Result<Self, BoundsError<f64>>
-    where Self: Sized;
+    where
+        Self: Sized;
 
     /// Update the kernel parameters with a theta vector.
     /// Adjust the parameters if they would otherwise violate bounds.
     /// Panics if the theta vector has wrong lenght – must equal n_params().
     fn with_clamped_theta(self, theta: &[f64]) -> Self
-    where Self: Sized;
+    where
+        Self: Sized;
 
     // Get the theta bounds for tuning (log-transformed).
     fn bounds(&self) -> Vec<(f64, f64)>;
@@ -46,10 +48,13 @@ pub trait Kernel: Clone + std::fmt::Debug {
 pub struct BoundedValue<A: PartialOrd + Clone> {
     value: A,
     max: A,
-    min: A
+    min: A,
 }
 
-impl<A: PartialOrd + Clone> BoundedValue<A> where A: PartialEq + Copy {
+impl<A: PartialOrd + Clone> BoundedValue<A>
+where
+    A: PartialEq + Copy,
+{
     /// Create a new value with bounds (inclusive).
     pub fn new(value: A, min: A, max: A) -> Result<Self, BoundsError<A>> {
         if min <= value && value <= max {
@@ -60,13 +65,19 @@ impl<A: PartialOrd + Clone> BoundedValue<A> where A: PartialEq + Copy {
     }
 
     /// Get the current value.
-    pub fn value(&self) -> A { self.value }
+    pub fn value(&self) -> A {
+        self.value
+    }
 
     /// Get the lower bound.
-    pub fn min(&self) -> A { self.min }
+    pub fn min(&self) -> A {
+        self.min
+    }
 
     /// Get the upper bound.
-    pub fn max(&self) -> A { self.max }
+    pub fn max(&self) -> A {
+        self.max
+    }
 
     /// Set a new value.
     pub fn with_value(self, value: A) -> Result<Self, BoundsError<A>> {
@@ -75,22 +86,31 @@ impl<A: PartialOrd + Clone> BoundedValue<A> where A: PartialEq + Copy {
 
     /// Set a new value. If bounds are violated, substitute the bound instead.
     pub fn with_clamped_value(self, value: A) -> Self {
-        let value =
-            if value < self.min {
-                self.min
-            } else if self.max < value {
-                self.max
-            } else {
-                value
-            };
-        Self { value, min: self.min, max: self.max }
+        let value = if value < self.min {
+            self.min
+        } else if self.max < value {
+            self.max
+        } else {
+            value
+        };
+        Self {
+            value,
+            min: self.min,
+            max: self.max,
+        }
     }
 }
 
 impl<A> std::fmt::Debug for BoundedValue<A>
-where A: PartialOrd + Clone + std::fmt::Debug {
+where
+    A: PartialOrd + Clone + std::fmt::Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BoundedValue({:?} in {:?} .. {:?})", self.value, self.min, self.max)
+        write!(
+            f,
+            "BoundedValue({:?} in {:?} .. {:?})",
+            self.value, self.min, self.max,
+        )
     }
 }
 
@@ -113,28 +133,35 @@ impl ConstantKernel {
         ConstantKernel { constant }
     }
 
-    pub fn constant(&self) -> BoundedValue<f64> { self.constant.clone() }
+    pub fn constant(&self) -> BoundedValue<f64> {
+        self.constant.clone()
+    }
 }
 
 impl Kernel for ConstantKernel {
     fn kernel<A: Scalar>(&self, x1: ArrayView2<A>, x2: ArrayView2<A>) -> Array2<A> {
-        Array::from_elem((x1.shape()[0], x2.shape()[0]),
-                         self.constant.value().into_scalar())
+        Array::from_elem(
+            (x1.shape()[0], x2.shape()[0]),
+            self.constant.value().into_scalar(),
+        )
     }
 
     fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
         let kernel = self.kernel(x, x);
-        let gradient = Array::from_elem((x.shape()[0], x.shape()[0], 1),
-                                        self.constant.value().into_scalar());
+        let gradient = Array::from_elem(
+            (x.shape()[0], x.shape()[0], 1),
+            self.constant.value().into_scalar(),
+        );
         (kernel, gradient)
     }
 
     fn diag<A: Scalar>(&self, x: ArrayView2<A>) -> Array1<A> {
-        Array::from_elem(x.shape()[0],
-                         self.constant.value().into_scalar())
+        Array::from_elem(x.shape()[0], self.constant.value().into_scalar())
     }
 
-    fn n_params(&self) -> usize { 1 }
+    fn n_params(&self) -> usize {
+        1
+    }
 
     fn theta(&self) -> Vec<f64> {
         vec![self.constant.value().ln()]
@@ -181,9 +208,13 @@ impl Matern {
         Matern { nu, length_scale }
     }
 
-    pub fn nu(&self) -> f64 { self.nu }
+    pub fn nu(&self) -> f64 {
+        self.nu
+    }
 
-    pub fn length_scale(&self) -> &[BoundedValue<f64>] { self.length_scale.as_slice() }
+    pub fn length_scale(&self) -> &[BoundedValue<f64>] {
+        self.length_scale.as_slice()
+    }
 
     fn length_scale_array(&self) -> Array1<f64> {
         self.length_scale.iter().map(BoundedValue::value).collect()
@@ -192,15 +223,26 @@ impl Matern {
 
 impl Kernel for Matern {
     fn kernel<A: Scalar>(&self, x1: ArrayView2<A>, x2: ArrayView2<A>) -> Array2<A> {
-        assert_eq!(x1.cols(), self.n_params(),
-                   "number of x1 columns must match number of features");
-        assert_eq!(x2.cols(), self.n_params(),
-                   "number of x2 columns must match number of features");
+        assert_eq!(
+            x1.cols(),
+            self.n_params(),
+            "number of x1 columns must match number of features",
+        );
+        assert_eq!(
+            x2.cols(),
+            self.n_params(),
+            "number of x2 columns must match number of features",
+        );
 
         // normalize the arrays via their length scale
         let length_scale = self.length_scale_array().mapv(A::from_f);
         let normalize_length_scale = |xs: ArrayView2<A>| {
-            xs.to_owned() / length_scale.view().insert_axis(Axis(0)).broadcast(xs.shape()).unwrap()
+            xs.to_owned()
+                / length_scale
+                    .view()
+                    .insert_axis(Axis(0))
+                    .broadcast(xs.shape())
+                    .unwrap()
         };
         let x1 = normalize_length_scale(x1);
         let x2 = normalize_length_scale(x2);
@@ -212,16 +254,14 @@ impl Kernel for Matern {
             nu if nu == 0.5 => (-dists).exp(),
             nu if nu == 1.5 => {
                 let kernel: Array2<A> = dists * A::from_f(3.0.sqrt());
-                (kernel.clone() + A::from_i(1))
-                    * (-kernel).exp()
-            },
+                (kernel.clone() + A::from_i(1)) * (-kernel).exp()
+            }
             nu if nu == 2.5 => {
                 // K = dists * sqrt(4)
                 let kernel: Array2<A> = dists * A::from_f(5.0.sqrt());
                 // (1 + K + K**2 / 3) * exp(-K)
-                (kernel.clone().powi(2) / A::from_i(3) + &kernel + A::from_i(1))
-                    * (-kernel).exp()
-            },
+                (kernel.clone().powi(2) / A::from_i(3) + &kernel + A::from_i(1)) * (-kernel).exp()
+            }
             _ => unimplemented!("Matern kernel with arbitrary values for nu"),
         };
         kernel
@@ -234,34 +274,50 @@ impl Kernel for Matern {
 
         // pairwise dimension-wise distances: d[ijk] = (x[ik] - x[jk])**2 / length_scale[k]**2
         let d_shape = (x.rows(), x.rows(), x.cols());
-        let d = (&x.insert_axis(Axis(1)).broadcast(d_shape).unwrap()
-                 - &x.insert_axis(Axis(0)).broadcast(d_shape).unwrap()).powi(2)
-            / length_scale.powi(2).insert_axis(Axis(0)).insert_axis(Axis(0));
+        let x_ik = x.insert_axis(Axis(1));
+        let x_ik = x_ik.broadcast(d_shape).unwrap();
+        let x_jk = x.insert_axis(Axis(0));
+        let x_jk = x_jk.broadcast(d_shape).unwrap();
+        let scales_k_square = length_scale
+            .powi(2)
+            .insert_axis(Axis(0))
+            .insert_axis(Axis(0));
+        let d = (&x_ik - &x_jk).powi(2) / scales_k_square;
         assert_eq!(d.shape(), &[x.rows(), x.rows(), self.n_params()]);
 
         let gradient = match self.nu {
             nu if nu == 0.5 => {
                 let mut gradient = kernel.clone().insert_axis(Axis(2)) * &d
                     / d.sum_axis(Axis(2)).sqrt().insert_axis(Axis(2));
-                gradient.map_inplace(|x| if !x.is_finite() { *x = 0f32.into() });
+                gradient.map_inplace(|x| {
+                    if !x.is_finite() {
+                        *x = 0f32.into();
+                    }
+                });
                 gradient
-            },
+            }
             nu if nu == 1.5 => {
                 // gradient = 3 * d * exp(-sqrt(3 * d.sum(-1)))[..., np.newaxis]
-                let tmp = (d.sum_axis(Axis(2)) * A::from_i(3)).sqrt();
+                let tmp = (-(d.sum_axis(Axis(2)) * A::from_i(3)).sqrt()).exp();
                 let gradient = &d.broadcast(gradient_shape).unwrap()
-                    * &(-tmp).exp().insert_axis(Axis(2)).broadcast(gradient_shape).unwrap()
+                    * &tmp.insert_axis(Axis(2)).broadcast(gradient_shape).unwrap()
                     * A::from_i(3);
                 gradient
-            },
+            }
             nu if nu == 2.5 => {
-                let tmp: Array3<A> = (d.sum_axis(Axis(2)) * A::from_i(5)).sqrt().insert_axis(Axis(2));
-                let gradient = (-tmp.clone()).exp().broadcast(gradient_shape).unwrap().to_owned()
+                let tmp: Array3<A> = (d.sum_axis(Axis(2)) * A::from_i(5))
+                    .sqrt()
+                    .insert_axis(Axis(2));
+                let gradient = (-tmp.clone())
+                    .exp()
+                    .broadcast(gradient_shape)
+                    .unwrap()
+                    .to_owned()
                     * &(tmp + A::from_i(1)).broadcast(gradient_shape).unwrap()
                     * d.broadcast(gradient_shape).unwrap()
-                    * A::from_f(5./3.);
+                    * A::from_f(5. / 3.);
                 gradient
-            },
+            }
             _ => unimplemented!("Matern kernel gradient with arbitrary values for nu"),
         };
         (kernel, gradient)
@@ -276,13 +332,19 @@ impl Kernel for Matern {
     }
 
     fn theta(&self) -> Vec<f64> {
-        self.length_scale.iter().map(BoundedValue::value).map(f64::ln).collect()
+        self.length_scale
+            .iter()
+            .map(BoundedValue::value)
+            .map(f64::ln)
+            .collect()
     }
 
     fn with_theta(self, theta: &[f64]) -> Result<Self, BoundsError<f64>> {
         assert!(theta.len() == self.n_params());
 
-        let length_scale = theta.iter().cloned()
+        let length_scale = theta
+            .iter()
+            .cloned()
             .map(f64::exp)
             .zip(self.length_scale)
             .map(|(value, bounded)| bounded.with_value(value))
@@ -294,7 +356,9 @@ impl Kernel for Matern {
     fn with_clamped_theta(self, theta: &[f64]) -> Self {
         assert!(theta.len() == self.n_params());
 
-        let length_scale = theta.iter().cloned()
+        let length_scale = theta
+            .iter()
+            .cloned()
             .map(f64::exp)
             .zip(self.length_scale)
             .map(|(value, bounded)| bounded.with_clamped_value(value))
@@ -304,11 +368,15 @@ impl Kernel for Matern {
     }
 
     fn bounds(&self) -> Vec<(f64, f64)> {
-        self.length_scale.iter().map(|bounds| (bounds.min().ln(), bounds.max().ln())).collect()
+        self.length_scale
+            .iter()
+            .map(|bounds| (bounds.min().ln(), bounds.max().ln()))
+            .collect()
     }
 }
 
-#[cfg(test)] speculate::speculate! {
+#[cfg(test)]
+speculate::speculate! {
 
     describe "Matern kernel" {
 
@@ -433,24 +501,32 @@ impl Kernel for Matern {
 /// A product of two kernels `k1 * k2`
 #[derive(Clone)]
 pub struct Product<K1, K2>
-where K1: Clone + Kernel,
-      K2: Clone + Kernel,
+where
+    K1: Clone + Kernel,
+    K2: Clone + Kernel,
 {
     k1: K1,
     k2: K2,
 }
 
 impl<K1: Clone + Kernel, K2: Clone + Kernel> Product<K1, K2> {
-    pub fn of(k1: K1, k2: K2) -> Self { Product { k1, k2 }}
+    pub fn of(k1: K1, k2: K2) -> Self {
+        Product { k1, k2 }
+    }
 
-    pub fn k1(&self) -> &K1 { &self.k1 }
+    pub fn k1(&self) -> &K1 {
+        &self.k1
+    }
 
-    pub fn k2(&self) -> &K2 { &self.k2 }
+    pub fn k2(&self) -> &K2 {
+        &self.k2
+    }
 }
 
 impl<K1, K2> Kernel for Product<K1, K2>
-where K1: Kernel,
-      K2: Kernel,
+where
+    K1: Kernel,
+    K2: Kernel,
 {
     fn kernel<A: Scalar>(&self, xa: ArrayView2<A>, xb: ArrayView2<A>) -> Array2<A> {
         self.k1.kernel(xa, xb) * self.k2.kernel(xa, xb)
@@ -460,9 +536,11 @@ where K1: Kernel,
         let (kernel1, gradient1) = self.k1.gradient(x);
         let (kernel2, gradient2) = self.k2.gradient(x);
         let kernel = &kernel1 * &kernel2;
-        let gradient = stack!(Axis(2),
-                              gradient1 * kernel2.insert_axis(Axis(2)),
-                              gradient2 * kernel1.insert_axis(Axis(2)));
+        let gradient = stack!(
+            Axis(2),
+            gradient1 * kernel2.insert_axis(Axis(2)),
+            gradient2 * kernel1.insert_axis(Axis(2))
+        );
         (kernel, gradient)
     }
 
@@ -520,11 +598,12 @@ fn cdist<A: Scalar>(xa: ArrayView2<A>, xb: ArrayView2<A>) -> Array2<A> {
         for (j, b) in xb.outer_iter().enumerate() {
             out[[i, j]] = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
         }
-    };
+    }
     out
 }
 
-#[cfg(test)] speculate::speculate! {
+#[cfg(test)]
+speculate::speculate! {
     describe "fn cdist()" {
         it "calculates single distance" {
             let a = array![[1., 3.]];
@@ -564,11 +643,15 @@ pub trait Scalar
 }
 
 impl Scalar for f64 {
-    fn from_f<F: Into<f64>>(x: F) -> Self { x.into() }
+    fn from_f<F: Into<f64>>(x: F) -> Self {
+        x.into()
+    }
 }
 
 impl Scalar for f32 {
-    fn from_f<F: Into<f64>>(x: F) -> Self { x.into() as f32 }
+    fn from_f<F: Into<f64>>(x: F) -> Self {
+        x.into() as f32
+    }
 }
 
 pub trait IntoScalar {
@@ -576,7 +659,9 @@ pub trait IntoScalar {
 }
 
 impl<T: num_traits::float::Float + Scalar> IntoScalar for T {
-    fn into_scalar<S: Scalar>(self) -> S { Scalar::from_f(self) }
+    fn into_scalar<S: Scalar>(self) -> S {
+        Scalar::from_f(self)
+    }
 }
 
 trait ArrayExt<A: Scalar, D: Dimension> {
@@ -587,8 +672,9 @@ trait ArrayExt<A: Scalar, D: Dimension> {
 }
 
 impl<A: Scalar, S, D> ArrayExt<A, D> for ArrayBase<S, D>
-where S: ndarray::Data<Elem = A>,
-      D: Dimension,
+where
+    S: ndarray::Data<Elem = A>,
+    D: Dimension,
 {
     fn powf(self, exponent: A) -> Array<A, D> {
         self.into_owned().mapv_into(|x| x.powf(exponent))

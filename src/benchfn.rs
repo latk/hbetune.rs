@@ -17,8 +17,9 @@ use num_traits::Float;
 /// assert_eq!(sphere(array![0.0, 0.0, 0.0, 0.0, 0.0]), 0.0);
 /// ```
 pub fn sphere<A, S>(xs: ArrayBase<S, Ix1>) -> A
-where S: Data<Elem = A>,
-      A: Clone + Float,
+where
+    S: Data<Elem = A>,
+    A: Clone + Float,
 {
     assert!(xs.len() > 0, "at least one dimension required");
     xs.mapv(|x| x.powi(2)).sum()

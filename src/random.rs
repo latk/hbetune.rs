@@ -1,9 +1,8 @@
-extern crate rand_core;
 extern crate rand;
+extern crate rand_core;
 extern crate rand_xoshiro;
-// use rand_xoshiro::rand_core::SeedableRng;
-use rand_core::SeedableRng;
 use rand::distributions::{self, Distribution as _};
+use rand_core::SeedableRng;
 
 type BasicRNG = rand_xoshiro::Xoshiro256StarStar;
 
@@ -23,11 +22,14 @@ impl RNG {
         RNG { basic_rng }
     }
 
-    pub fn basic_rng_mut(&mut self) -> &mut BasicRNG { &mut self.basic_rng }
+    pub fn basic_rng_mut(&mut self) -> &mut BasicRNG {
+        &mut self.basic_rng
+    }
 
     pub fn uniform<T, Range>(&mut self, range: Range) -> T
-    where Range: Into<rand::distributions::Uniform<T>>,
-          T: rand::distributions::uniform::SampleUniform,
+    where
+        Range: Into<rand::distributions::Uniform<T>>,
+        T: rand::distributions::uniform::SampleUniform,
     {
         range.into().sample(self.basic_rng_mut())
     }

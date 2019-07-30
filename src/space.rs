@@ -1,6 +1,6 @@
 use ndarray::prelude::*;
 
-use crate::{Scalar, Individual, RNG};
+use crate::{Individual, Scalar, RNG};
 
 /// The parameter space that contains feasible solutions.
 /// This space is usually handled in its natural units,
@@ -18,14 +18,20 @@ impl Space {
     }
 
     /// The number of dimensions.
-    pub fn len(&self) -> usize { self.params.len() }
+    pub fn len(&self) -> usize {
+        self.params.len()
+    }
 
     /// Add a real-valued parameter.
     /// The bounds `lo`, `hi` are inclusive.
     /// Panics if the parameter range has zero size.
     pub fn add_real_parameter(&mut self, name: impl Into<String>, lo: f64, hi: f64) {
         assert!(lo < hi);
-        self.params.push(Parameter::Real { name: name.into(), lo, hi });
+        self.params.push(Parameter::Real {
+            name: name.into(),
+            lo,
+            hi,
+        });
     }
 
     /// Project a parameter array in-place into the range 0 to 1 inclusive.
@@ -91,9 +97,10 @@ impl Space {
 
     /// Sample a new Individual uniformly from the projected parameter space.
     pub fn sample<A>(&self, rng: &mut RNG) -> Individual<A>
-    where A: Scalar + rand::distributions::uniform::SampleUniform
+    where
+        A: Scalar + rand::distributions::uniform::SampleUniform,
     {
-        let range = num_traits::zero() ..= num_traits::one();
+        let range = num_traits::zero()..=num_traits::one();
         let sample = Array::from_shape_fn(self.len(), |_| rng.uniform(range.clone()));
         Individual::new(self.from_transformed(sample))
     }
@@ -109,8 +116,9 @@ impl Space {
 
         for (i, x) in sample_transformed.indexed_iter_mut() {
             *x = match self.params[i] {
-                Parameter::Real { .. } =>
-                    A::from_f(sample_truncnorm((*x).into(), relscale[i], 0.0, 1.0, rng)),
+                Parameter::Real { .. } => {
+                    A::from_f(sample_truncnorm((*x).into(), relscale[i], 0.0, 1.0, rng))
+                }
             }
         }
 
@@ -119,13 +127,13 @@ impl Space {
 }
 
 fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
-    use statrs::distribution::{Normal, Univariate, InverseCDF};
+    use statrs::distribution::{InverseCDF, Normal, Univariate};
 
     let normal = Normal::new(0.0, 1.0).unwrap();
-    let az = (a - mu)/sigma;
-    let bz = (b - mu)/sigma;
+    let az = (a - mu) / sigma;
+    let bz = (b - mu) / sigma;
 
-    let xz = rng.uniform(normal.cdf(az) ..= normal.cdf(bz));
+    let xz = rng.uniform(normal.cdf(az)..=normal.cdf(bz));
 
     let x = normal.inverse_cdf(xz) * sigma + mu;
 

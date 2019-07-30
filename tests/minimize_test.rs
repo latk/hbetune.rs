@@ -1,10 +1,12 @@
+#[macro_use]
+extern crate ndarray;
 extern crate ggtune;
-#[macro_use] extern crate ndarray;
 extern crate itertools;
 extern crate noisy_float;
-use ndarray::prelude::*;
+
+use ggtune::{EstimatorGPR, Minimizer};
 use itertools::Itertools as _;
-use ggtune::{Minimizer, EstimatorGPR};
+use ndarray::prelude::*;
 
 #[test]
 fn sphere_d2_f64() {
@@ -17,7 +19,8 @@ fn sphere_d2_f64() {
             minimizer.max_nevals = 40;
             space.add_real_parameter("x1", -2.0, 3.0);
             space.add_real_parameter("x2", -3.0, 2.0);
-        });
+        },
+    );
 }
 
 #[test]
@@ -31,7 +34,8 @@ fn sphere_d2_f32() {
             minimizer.max_nevals = 40;
             space.add_real_parameter("x1", -2.0, 3.0);
             space.add_real_parameter("x2", -3.0, 2.0);
-        });
+        },
+    );
 }
 
 #[test]
@@ -45,7 +49,8 @@ fn sphere_d2_edge() {
             minimizer.max_nevals = 50;
             space.add_real_parameter("x1", 0.1, 4.0);
             space.add_real_parameter("x2", -2.0, 2.0);
-        });
+        },
+    );
 }
 
 fn run_minimize_test<A, Model, SetupFn>(
@@ -54,10 +59,10 @@ fn run_minimize_test<A, Model, SetupFn>(
     ideal: &[Array1<A>],
     max_distance: f64,
     setup: SetupFn,
-)
-where A: ggtune::Scalar,
-      Model: ggtune::Estimator<A>,
-      SetupFn: Fn(&mut ggtune::Minimizer<A, Model>, &mut ggtune::Space),
+) where
+    A: ggtune::Scalar,
+    Model: ggtune::Estimator<A>,
+    SetupFn: Fn(&mut ggtune::Minimizer<A, Model>, &mut ggtune::Space),
 {
     assert!(!ideal.is_empty(), "a slice of ideal points is required");
 
@@ -67,31 +72,40 @@ where A: ggtune::Scalar,
     let mut space = ggtune::Space::new();
     setup(&mut minimizer, &mut space);
 
-    let result = minimizer.minimize(&objective, space, &mut rng, None, vec![])
+    let result = minimizer
+        .minimize(&objective, space, &mut rng, None, vec![])
         .expect("minimization should proceed successfully");
 
-    let guess: Array1<A> = result.best_individual()
+    let guess: Array1<A> = result
+        .best_individual()
         .expect("there should be a best individual")
         .sample()
-        .iter().cloned()
+        .iter()
+        .cloned()
         .collect();
 
-    let distance: f64 = ideal.iter()
+    let distance: f64 = ideal
+        .iter()
         .map(|ideal| (ideal - &guess).mapv(|x| x.powi(2)).sum().sqrt())
         .map(ggtune::Scalar::to_n64)
         .min()
         .expect("there should be a minimal distance")
         .into();
 
-    assert!(distance < max_distance,
-            "optimal point was not found\n\
-             |     distance: {distance}\n\
-             | ideal points: {ideal}\n\
-             |        guess: {guess}\n\
-             |      history: {history:.2}",
-            distance = distance,
-            ideal = ideal.iter().format(", "),
-            guess = guess,
-            history = result.ys().expect("there should be results").iter().format(", "),
+    assert!(
+        distance < max_distance,
+        "optimal point was not found\n\
+         |     distance: {distance}\n\
+         | ideal points: {ideal}\n\
+         |        guess: {guess}\n\
+         |      history: {history:.2}",
+        distance = distance,
+        ideal = ideal.iter().format(", "),
+        guess = guess,
+        history = result
+            .ys()
+            .expect("there should be results")
+            .iter()
+            .format(", "),
     );
 }

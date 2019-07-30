@@ -1,11 +1,13 @@
-use crate::{Individual, Scalar, OutputEventHandler, Output, RNG, Space};
-use crate::{SurrogateModel, Estimator as ModelEstimator};
 use crate::{AcquisitionStrategy, MutationAcquisition};
+use crate::{Estimator as ModelEstimator, SurrogateModel};
+use crate::{Individual, Output, OutputEventHandler, Scalar, Space, RNG};
+
+use std::cell::RefCell;
+use std::iter::FromIterator as _;
+use std::time::{Duration, Instant};
+
 use itertools::Itertools as _;
 use ndarray::prelude::*;
-use std::iter::FromIterator as _;
-use std::time::{Instant, Duration};
-use std::cell::RefCell;
 
 type TimeSource = Fn() -> Instant;
 
@@ -14,8 +16,9 @@ pub trait ObjectiveFunction<A>: Sync {
 }
 
 impl<A, F> ObjectiveFunction<A> for F
-where F: Fn(ArrayView1<A>) -> A + Sync,
-      A: Default,
+where
+    F: Fn(ArrayView1<A>) -> A + Sync,
+    A: Default,
 {
     fn run<'a>(&self, xs: ArrayView1<'a, A>, _rng: &'a mut RNG) -> (A, A) {
         (self(xs), Default::default())
@@ -46,17 +49,25 @@ impl<A, Model> OptimizationResult<A, Model> {
 
     /// Select the best evaluation results.
     pub fn best_n(&self, n: usize) -> impl Iterator<Item = &Individual<A>>
-    where A: PartialOrd + Copy {
-        self.all_individuals.iter()
+    where
+        A: PartialOrd + Copy,
+    {
+        self.all_individuals
+            .iter()
             .filter(|ind| ind.observation().is_some())
-            .sorted_by(|a, b| a.observation().partial_cmp(&b.observation())
-                       .expect("observation should have an order"))
+            .sorted_by(|a, b| {
+                a.observation()
+                    .partial_cmp(&b.observation())
+                    .expect("observation should have an order")
+            })
             .take(n)
     }
 
     /// Best result.
     pub fn best_individual(&self) -> Option<&Individual<A>>
-    where A: PartialOrd + Copy {
+    where
+        A: PartialOrd + Copy,
+    {
         self.best_n(1).next()
     }
 
@@ -67,8 +78,12 @@ impl<A, Model> OptimizationResult<A, Model> {
 
     /// Input variables of all evaluations
     pub fn xs(&self) -> Array2<A>
-    where A: Copy {
-        let samples = self.all_individuals.iter()
+    where
+        A: Copy,
+    {
+        let samples = self
+            .all_individuals
+            .iter()
             .map(|ind| ind.sample().insert_axis(Axis(0)))
             .collect_vec();
         ndarray::stack(Axis(0), &samples).unwrap()
@@ -76,8 +91,12 @@ impl<A, Model> OptimizationResult<A, Model> {
 
     /// Output variables of all evaluations.
     pub fn ys(&self) -> Option<Array1<A>>
-    where A: Copy {
-        let ys: Option<Vec<A>> = self.all_individuals.iter()
+    where
+        A: Copy,
+    {
+        let ys: Option<Vec<A>> = self
+            .all_individuals
+            .iter()
             .map(|ind| ind.observation())
             .collect();
         Some(Array::from_vec(ys?))
@@ -85,15 +104,18 @@ impl<A, Model> OptimizationResult<A, Model> {
 
     /// Best observed value.
     pub fn fmin(&self) -> Option<A>
-    where A: Copy + PartialOrd {
+    where
+        A: Copy + PartialOrd,
+    {
         self.best_individual().and_then(|ind| ind.observation())
     }
 }
 
 /// Configuration for the minimizer.
 pub struct Minimizer<A, Estimator>
-where Estimator: ModelEstimator<A>,
-      A: Scalar,
+where
+    Estimator: ModelEstimator<A>,
+    A: Scalar,
 {
     /// How many samples are taken per generation.
     pub popsize: usize,
@@ -136,8 +158,9 @@ where Estimator: ModelEstimator<A>,
 }
 
 impl<A, Estimator> Default for Minimizer<A, Estimator>
-where Estimator: ModelEstimator<A>,
-      A: Scalar,
+where
+    Estimator: ModelEstimator<A>,
+    A: Scalar,
 {
     fn default() -> Self {
         Self {
@@ -157,8 +180,9 @@ where Estimator: ModelEstimator<A>,
 }
 
 impl<A, Estimator> Minimizer<A, Estimator>
-where Estimator: ModelEstimator<A>,
-      A: Scalar,
+where
+    Estimator: ModelEstimator<A>,
+    A: Scalar,
 {
     /// Minimize the objective `objective(sample, rng) -> (value, cost)`.
     ///
@@ -180,28 +204,34 @@ where Estimator: ModelEstimator<A>,
         outputs: Option<Box<dyn OutputEventHandler<A>>>,
         historic_individuals: impl IntoIterator<Item = Individual<A>>,
     ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
-        assert!(self.initial + self.popsize <= self.max_nevals,
-                "evaluation budget {max_nevals} too small with {initial}+n*{popsize} evaluations",
-                max_nevals = self.max_nevals, initial = self.initial, popsize = self.popsize);
-
-        let acquisition_strategy = self.acquisition_strategy.take().unwrap_or_else(
-            || Box::new(MutationAcquisition { breadth: 10 })
+        assert!(
+            self.initial + self.popsize <= self.max_nevals,
+            "evaluation budget {max_nevals} too small with {initial}+n*{popsize} evaluations",
+            max_nevals = self.max_nevals,
+            initial = self.initial,
+            popsize = self.popsize
         );
 
-        let outputs = outputs.unwrap_or_else(
-            || Box::new(Output::new(&space))
-        );
+        let acquisition_strategy = self
+            .acquisition_strategy
+            .take()
+            .unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
 
-        let estimator = self.estimator.take().unwrap_or_else(
-            || Estimator::new(&space)
-        );
+        let outputs = outputs.unwrap_or_else(|| Box::new(Output::new(&space)));
+
+        let estimator = self
+            .estimator
+            .take()
+            .unwrap_or_else(|| Estimator::new(&space));
 
         let historic_individuals = Vec::from_iter(historic_individuals);
 
-        assert!(historic_individuals.iter()
-                .all(|ind| ind.is_fully_initialized()));
-        assert!(historic_individuals.iter()
-                .all(|ind| ind.gen().expect("gen should be initialized") == -1));
+        assert!(historic_individuals
+            .iter()
+            .all(|ind| ind.is_fully_initialized()));
+        assert!(historic_individuals
+            .iter()
+            .all(|ind| ind.gen().expect("gen should be initialized") == -1));
 
         let instance = MinimizationInstance {
             config: self,
@@ -219,8 +249,9 @@ where Estimator: ModelEstimator<A>,
 }
 
 struct MinimizationInstance<'life, A, Estimator>
-where Estimator: ModelEstimator<A>,
-      A: Scalar,
+where
+    Estimator: ModelEstimator<A>,
+    A: Scalar,
 {
     config: Minimizer<A, Estimator>,
     objective: &'life dyn ObjectiveFunction<A>,
@@ -231,8 +262,9 @@ where Estimator: ModelEstimator<A>,
 }
 
 impl<'life, A, Estimator> MinimizationInstance<'life, A, Estimator>
-where Estimator: ModelEstimator<A>,
-      A: Scalar,
+where
+    Estimator: ModelEstimator<A>,
+    A: Scalar,
 {
     fn run(
         &self,
@@ -261,21 +293,22 @@ where Estimator: ModelEstimator<A>,
         budget = budget.saturating_sub(population.len());
         all_evalutions.extend(population.iter().cloned());
 
-
         all_models.push(self.fit_next_model(all_evalutions.as_slice(), 0, None, rng)?);
 
         let find_fmin = |individuals: &[Individual<A>], model: &Estimator::Model| {
-            let fmin_operator = FitnessOperator(model,
-                                                UsePosterior(config.fmin_via_posterior));
-            individuals.into_iter().min_by(
-                |a, b| fmin_operator.compare(a, b).expect("individuals should be orderable")
-            ).and_then(|ind| fmin_operator.get_fitness(ind))
+            let fmin_operator = FitnessOperator(model, UsePosterior(config.fmin_via_posterior));
+            individuals
+                .into_iter()
+                .min_by(|a, b| {
+                    fmin_operator
+                        .compare(a, b)
+                        .expect("individuals should be orderable")
+                })
+                .and_then(|ind| fmin_operator.get_fitness(ind))
         };
 
-        let mut fmin: A = find_fmin(
-            all_evalutions.as_slice(),
-            all_models.last().unwrap(),
-        ).expect("fmin could be found");
+        let mut fmin: A = find_fmin(all_evalutions.as_slice(), all_models.last().unwrap())
+            .expect("fmin could be found");
 
         // Counter for the current generation.
         // The u16 type is large enough for expected values (0 .. a few hundred)
@@ -286,18 +319,31 @@ where Estimator: ModelEstimator<A>,
             generation += 1;
             let model = all_models.last().unwrap();
             population = self.resize_population(
-                population, std::cmp::min(budget, config.popsize), &model, rng);
+                population,
+                std::cmp::min(budget, config.popsize),
+                &model,
+                rng,
+            );
 
             use crate::util::clip;
             let relscale_bound = self.relscale_at_gen(generation.into());
-            let relscale = model.length_scales().iter()
+            let relscale = model
+                .length_scales()
+                .iter()
                 .map(|scale| clip(*scale, None, Some(relscale_bound)))
                 .collect_vec();
 
-            self.outputs.borrow_mut().event_new_generation(generation.into(), relscale.as_slice());
+            self.outputs
+                .borrow_mut()
+                .event_new_generation(generation.into(), relscale.as_slice());
 
             let mut offspring = self.acquire(
-                population.as_slice(), &model, rng, fmin, relscale.as_slice());
+                population.as_slice(),
+                &model,
+                rng,
+                fmin,
+                relscale.as_slice(),
+            );
             assert_eq!(population.len(), offspring.len());
 
             self.evaluate_all(offspring.as_mut_slice(), rng, generation.into());
@@ -330,31 +376,33 @@ where Estimator: ModelEstimator<A>,
             .collect_vec()
     }
 
-    fn evaluate_all(
-        &self,
-        individuals: &mut [Individual<A>],
-        rng: &mut RNG,
-        generation: u16,
-    ) {
+    fn evaluate_all(&self, individuals: &mut [Individual<A>], rng: &mut RNG, generation: u16) {
         let timer = self.config.time_source.as_ref()();
         let objective = self.objective;
 
-        let rngs = individuals.iter()
+        let rngs = individuals
+            .iter()
             .map(|_| rng.fork_random_state())
             .collect_vec();
 
         use rayon::prelude::*;
 
-        individuals.par_iter_mut().zip(rngs).for_each(|(ind, mut rng): (&mut Individual<A>, _)| {
-            let (observation, cost) = objective.run(ind.sample(), &mut rng);
-            ind.set_observation(observation).expect("observation was unset");
-            ind.set_cost(cost).expect("cost was unset");
-            ind.set_gen(generation.into()).expect("generation was unset");
-            assert!(ind.is_fully_initialized());
-        });
+        individuals
+            .par_iter_mut()
+            .zip(rngs)
+            .for_each(|(ind, mut rng): (&mut Individual<A>, _)| {
+                let (observation, cost) = objective.run(ind.sample(), &mut rng);
+                ind.set_observation(observation)
+                    .expect("observation was unset");
+                ind.set_cost(cost).expect("cost was unset");
+                ind.set_gen(generation.into())
+                    .expect("generation was unset");
+                assert!(ind.is_fully_initialized());
+            });
 
-        self.outputs.borrow_mut().event_evaluations_completed(
-            individuals, timer.elapsed());
+        self.outputs
+            .borrow_mut()
+            .event_evaluations_completed(individuals, timer.elapsed());
     }
 
     fn fit_next_model(
@@ -370,19 +418,26 @@ where Estimator: ModelEstimator<A>,
 
         let xs: Array2<A> = ndarray::stack(
             Axis(0),
-            individuals.iter()
+            individuals
+                .iter()
                 .map(|ind| ind.sample().insert_axis(Axis(0)))
-                .collect_vec().as_slice(),
-        ).unwrap();
+                .collect_vec()
+                .as_slice(),
+        )
+        .unwrap();
 
-        let ys: Array1<A> = individuals.iter()
+        let ys: Array1<A> = individuals
+            .iter()
             .map(|ind| ind.observation().expect("individual has observation"))
             .collect();
 
-        let model = self.estimator.estimate(
-            xs, ys, self.space.clone(), prev_model, rng)?;
+        let model = self
+            .estimator
+            .estimate(xs, ys, self.space.clone(), prev_model, rng)?;
 
-        self.outputs.borrow_mut().event_model_trained(gen, &model, timer.elapsed());
+        self.outputs
+            .borrow_mut()
+            .event_model_trained(gen, &model, timer.elapsed());
 
         Ok(model)
     }
@@ -395,25 +450,33 @@ where Estimator: ModelEstimator<A>,
         rng: &mut RNG,
     ) -> Vec<Individual<A>> {
         // Sort the individuals.
-        let fitness_operator = FitnessOperator(
-            model, UsePosterior(self.config.select_via_posterior));
-        population.sort_by(|a, b| fitness_operator.compare(a, b).expect("individuals are comparable"));
+        let fitness_operator =
+            FitnessOperator(model, UsePosterior(self.config.select_via_posterior));
+        population.sort_by(|a, b| {
+            fitness_operator
+                .compare(a, b)
+                .expect("individuals are comparable")
+        });
         // If there are too many individuals, remove worst-ranking individuals.
         population.truncate(newsize);
 
         // If there are too few inidividuals, repeat individusals.
         // It might be better to pad with random choices,
         // but these individuals must be fully evaluated.
-        let pool = 0 .. population.len();
         while population.len() < newsize {
-            population.push(population[rng.uniform(pool.clone())].clone());
+            let i = rng.uniform(0..population.len());
+            population.push(population[i].clone());
         }
 
         population
     }
 
     fn relscale_at_gen(&self, generation: i32) -> f64 {
-        assert!(generation >= 1, "generation must be positive: {}", generation);
+        assert!(
+            generation >= 1,
+            "generation must be positive: {}",
+            generation
+        );
         let attenuation = self.config.relscale_attenuation.powi(generation - 1);
         attenuation * self.config.relscale_initial
     }
@@ -428,10 +491,13 @@ where Estimator: ModelEstimator<A>,
     ) -> Vec<Individual<A>> {
         let timer = self.config.time_source.as_ref()();
 
-        let offspring = self.acquisition_strategy.acquire(
-            population, model, &self.space, rng, fmin, relscale);
+        let offspring =
+            self.acquisition_strategy
+                .acquire(population, model, &self.space, rng, fmin, relscale);
 
-        self.outputs.borrow_mut().event_acquisition_completed(timer.elapsed());
+        self.outputs
+            .borrow_mut()
+            .event_acquisition_completed(timer.elapsed());
 
         offspring
     }
@@ -442,18 +508,17 @@ where Estimator: ModelEstimator<A>,
         offspring: Vec<Individual<A>>,
         model: &Estimator::Model,
     ) -> Vec<Individual<A>> {
+        let fitness_operator =
+            FitnessOperator(model, UsePosterior(self.config.select_via_posterior));
 
-        let fitness_operator = FitnessOperator(
-            model, UsePosterior(self.config.select_via_posterior));
+        let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 
-        let (selected, rejected) = select_next_population(
-            parents, offspring, fitness_operator);
-
-        let population = replace_worst_n_individuals(
-            self.config.n_replacements,
-            selected,
-            rejected,
-            |a, b| fitness_operator.compare(a, b).expect("individuals should be orderable"));
+        let population =
+            replace_worst_n_individuals(self.config.n_replacements, selected, rejected, |a, b| {
+                fitness_operator
+                    .compare(a, b)
+                    .expect("individuals should be orderable")
+            });
 
         population
     }
@@ -467,7 +532,9 @@ struct FitnessOperator<'life, A>(&'life SurrogateModel<A>, UsePosterior);
 
 impl<'life, A> FitnessOperator<'life, A> {
     fn get_fitness(&self, ind: &Individual<A>) -> Option<A>
-    where A: Scalar {
+    where
+        A: Scalar,
+    {
         let &FitnessOperator(ref model, UsePosterior(use_posterior)) = self;
         if use_posterior {
             Some(model.predict_mean(ind.sample().to_owned()))
@@ -477,7 +544,9 @@ impl<'life, A> FitnessOperator<'life, A> {
     }
 
     fn compare(&self, a: &Individual<A>, b: &Individual<A>) -> Option<std::cmp::Ordering>
-    where A: PartialOrd + Scalar {
+    where
+        A: PartialOrd + Scalar,
+    {
         let a = self.get_fitness(a);
         let b = self.get_fitness(b);
         a.partial_cmp(&b)
@@ -496,13 +565,13 @@ fn select_next_population<A>(
     offspring: Vec<Individual<A>>,
     fitness: FitnessOperator<A>,
 ) -> (Vec<Individual<A>>, Vec<Individual<A>>)
-where A: Scalar
+where
+    A: Scalar,
 {
     let mut selected = Vec::new();
     let mut rejected = Vec::new();
 
     for (parent, offspring) in parents.into_iter().zip_eq(offspring) {
-
         let (select, reject) =
             if fitness.compare(&parent, &offspring) == Some(std::cmp::Ordering::Less) {
                 (parent, offspring)
@@ -526,9 +595,9 @@ fn replace_worst_n_individuals<T, Comparator>(
     mut replacement_pool: Vec<T>,
     comparator: Comparator,
 ) -> Vec<T>
-where Comparator: Fn(&T, &T) -> std::cmp::Ordering,
+where
+    Comparator: Fn(&T, &T) -> std::cmp::Ordering,
 {
-
     // find candidate replacements
     replacement_pool.sort_by(&comparator);
     replacement_pool.truncate(n_replacements);
@@ -541,7 +610,8 @@ where Comparator: Fn(&T, &T) -> std::cmp::Ordering,
     population
 }
 
-#[cfg(test)] speculate::speculate! {
+#[cfg(test)]
+speculate::speculate! {
     describe "fn replace_worst_n_individuals()" {
         it "replaces worst individuals" {
             assert_eq!(

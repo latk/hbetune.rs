@@ -1,6 +1,6 @@
 use ndarray::prelude::*;
 
-use crate::{RNG, Space, Scalar};
+use crate::{Scalar, Space, RNG};
 
 /// An estimator that creates a SurrogateModel
 pub trait Estimator<A: Scalar> {
@@ -24,7 +24,6 @@ pub trait Estimator<A: Scalar> {
 /// A regression model to predict the value of points.
 /// This is used to guide the acquisition of new samples.
 pub trait SurrogateModel<A: Scalar> {
-
     /// Parameter space for the model
     fn space(&self) -> &Space;
 

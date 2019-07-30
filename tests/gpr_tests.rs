@@ -1,15 +1,19 @@
-#[macro_use] extern crate ggtune;
+#[macro_use]
+extern crate ggtune;
 extern crate speculate;
-#[macro_use] extern crate ndarray;
-#[macro_use] extern crate itertools;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate ndarray;
+#[macro_use]
+extern crate itertools;
 
-use speculate::speculate;
-use ndarray::prelude::*;
-use ggtune::{SurrogateModel as _, SurrogateModelGPR, RNG, Space, EstimatorGPR, Estimator as _};
+use ggtune::{Estimator as _, EstimatorGPR, Space, SurrogateModel as _, SurrogateModelGPR, RNG};
 use itertools::Itertools as _;
+use ndarray::prelude::*;
+use speculate::speculate;
 
-struct SimpleModel { model: SurrogateModelGPR<f64> }
+struct SimpleModel {
+    model: SurrogateModelGPR<f64>,
+}
 
 impl std::fmt::Debug for SimpleModel {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -30,29 +34,39 @@ impl SimpleModel {
 }
 
 macro_rules! assert_is_close {
-    ($left:expr, $right:expr, epsilon $epsilon:expr) => (
+    ($left:expr, $right:expr, epsilon $epsilon:expr) => {
         match ($left, $right, $epsilon) {
-            (left, right, epsilon) =>
-                assert!((left - right).abs() < epsilon,
+            (left, right, epsilon) => assert!(
+                (left - right).abs() < epsilon,
                 "expected ({}) == ({}) with epsilon {} but found\n\
-                  left: {:?}\n\
-                 right: {:?}",
-                stringify!($left), stringify!($right), epsilon, left, right)
+                 |  left: {:?}\n\
+                 | right: {:?}",
+                stringify!($left),
+                stringify!($right),
+                epsilon,
+                left,
+                right
+            ),
         }
-    )
+    };
 }
 
 macro_rules! assert_relation {
-    (operator $operator:tt, $left:expr, $right:expr) => (
+    (operator $operator:tt, $left:expr, $right:expr) => {
         match ($left, $right) {
             (left, right) => assert!(
                 left $operator right,
-            "expected ({}) {} ({}) but found\n\
-              left: {:?}\n\
-              right: {:?}",
-            stringify!($left), stringify!($operator), stringify!($right), left, right)
+                "expected ({}) {} ({}) but found\n\
+                 |  left: {:?}\n\
+                 | right: {:?}",
+                stringify!($left),
+                stringify!($operator),
+                stringify!($right),
+                left,
+                right
+            )
         }
-    )
+    };
 }
 
 speculate! {
@@ -283,8 +297,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
 
     fn generate_training_set(training_set: &str, rng: &mut RNG) -> Array2<f64> {
         match training_set {
-            "randomTraining" =>
-                Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0 ..= 2.0)),
+            "randomTraining" => Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0..=2.0)),
             "gridTraining" => {
                 const SIZE: usize = 7;
                 let gridaxis = Array::linspace(-2.0, 2.0, SIZE);
@@ -295,7 +308,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
                         gridaxis[i / SIZE]
                     }
                 })
-            },
+            }
             _ => unimplemented!("{}", training_set),
         }
     }
@@ -309,32 +322,37 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
             .length_scale_bounds(vec![(1e-2, 2e1); 2])
             .noise_bounds(1e-2, 1e1)
             .n_restarts_optimizer(1)
-            .estimate(
-                xs.clone(), ys, space, None, rng,
-            ).expect("model should train successfully");
+            .estimate(xs.clone(), ys, space, None, rng)
+            .expect("model should train successfully");
 
         model
     }
+
+    let cond = |cond, value| if cond { Some(value) } else { None };
 
     let allowed_failures = 0
         + (noise_level > 1.0) as usize
         + (testmode == "newsample") as usize
         + ((training_set, testmode) == ("randomTraining", "newsample")) as usize;
 
-    let allowed_noise = noise_level + 0.1
-        + if training_set == "randomTraining" { 0.1 } else { 0.0 }
-        + if testmode == "newsample" { 0.1 } else { 0.0 }
-        + if testmode == "selftest" && noise_level == 0.0 { 0.1 } else { 0.0 };
-
-    let allowed_noise = if allowed_noise < 0.1 { 0.1 } else { allowed_noise };
+    let allowed_noise = [
+        Some(noise_level),
+        Some(0.1),
+        cond(training_set == "randomTraining", 0.1),
+        cond(testmode == "newsample", 0.1),
+        cond(testmode == "selftest" && noise_level == 0.0, 0.1),
+    ]
+    .iter()
+    .flatten()
+    .sum();
 
     let xs_test = match testmode {
         "selftest" => xs.clone(),
         "newsample" => Array::from_shape_fn((25, 2), |(i, _)| {
             if i < 15 {
-                rng.uniform(-2.0 ..= 2.0)
+                rng.uniform(-2.0..=2.0)
             } else {
-                rng.uniform(-1.0 ..= 1.0)
+                rng.uniform(-1.0..=1.0)
             }
         }),
         _ => unimplemented!("{}", testmode),
@@ -343,7 +361,8 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     let expected_ys = xs_test.map_axis(Axis(1), |ax| sphere(ax));
     let (predicted_ys, predicted_std) = model.predict_mean_std_a(xs_test.clone());
 
-    let error = (&predicted_ys - &expected_ys).mapv_into(|error| error.powi(2))
+    let error = (&predicted_ys - &expected_ys)
+        .mapv_into(|error| error.powi(2))
         .mean_axis(Axis(0))
         .into_scalar()
         .sqrt();
@@ -351,10 +370,11 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     assert_relation!(operator <, error, allowed_noise);
 
     fn index_locs<'a, T>(
-        items: impl IntoIterator<Item = T> + 'a, locs: &'a Vec<bool>,
-    ) -> impl Iterator<Item = T> + 'a
-    {
-        items.into_iter()
+        items: impl IntoIterator<Item = T> + 'a,
+        locs: &'a Vec<bool>,
+    ) -> impl Iterator<Item = T> + 'a {
+        items
+            .into_iter()
             .zip_eq(locs.iter().cloned())
             .filter_map(|(el, ok)| if ok { Some(el) } else { None })
     }
@@ -374,46 +394,75 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             let locs = &self.locs;
             writeln!(f, "locs [{}]", locs.iter().join(", "))?;
-            writeln!(f, "x1       [{}]", index_locs(self.xs_test.index_axis(Axis(1), 0), locs).join(", "))?;
-            writeln!(f, "x2       [{}]", index_locs(self.xs_test.index_axis(Axis(1), 1), locs).join(", "))?;
+            writeln!(
+                f,
+                "x1       [{}]",
+                index_locs(self.xs_test.index_axis(Axis(1), 0), locs).join(", ")
+            )?;
+            writeln!(
+                f,
+                "x2       [{}]",
+                index_locs(self.xs_test.index_axis(Axis(1), 1), locs).join(", ")
+            )?;
 
-            writeln!(f, "ys our   [{}]", index_locs(self.predicted_ys, locs).join(", "))?;
-            writeln!(f, "ys expec [{}]", index_locs(self.expected_ys, locs).join(", "))?;
-            writeln!(f, "std our  [{}]", index_locs(self.predicted_std, locs).join(", "))?;
+            writeln!(
+                f,
+                "ys our   [{}]",
+                index_locs(self.predicted_ys, locs).join(", ")
+            )?;
+            writeln!(
+                f,
+                "ys expec [{}]",
+                index_locs(self.expected_ys, locs).join(", ")
+            )?;
+            writeln!(
+                f,
+                "std our  [{}]",
+                index_locs(self.predicted_std, locs).join(", ")
+            )?;
             Ok(())
         }
     }
 
     let bound = |zscore: f64| {
-        let bounds = expected_ys.clone()
-            + zscore * &predicted_std
-            + zscore.signum() * allowed_noise;
+        let bounds =
+            expected_ys.clone() + zscore * &predicted_std + zscore.signum() * allowed_noise;
         bounds
     };
 
     let prediction_not_ok = izip!(bound(-2.0).iter(), predicted_ys.iter(), bound(1.0).iter())
-        .map(|(lo, y, hi)| !( lo <= y && y <= hi ))
+        .map(|(lo, y, hi)| !(lo <= y && y <= hi))
         .collect_vec();
     let prediction_not_ok_count: usize = prediction_not_ok.iter().map(|ok| *ok as usize).sum();
-    assert!(prediction_not_ok_count <= allowed_failures,
-            "Incorrect prediction ({})\n{:?}", prediction_not_ok_count, LocInfo {
-                locs: prediction_not_ok,
-                xs_test: xs_test.view(),
-                predicted_ys: predicted_ys.view(),
-                expected_ys: expected_ys.view(),
-                predicted_std: predicted_std.view(),
-            });
+    assert!(
+        prediction_not_ok_count <= allowed_failures,
+        "Incorrect prediction ({})\n{:?}",
+        prediction_not_ok_count,
+        LocInfo {
+            locs: prediction_not_ok,
+            xs_test: xs_test.view(),
+            predicted_ys: predicted_ys.view(),
+            expected_ys: expected_ys.view(),
+            predicted_std: predicted_std.view(),
+        }
+    );
 
-    let std_not_ok = predicted_std.iter()
-        .map(|&std| !( std < 1.5 * allowed_noise ))
+    let std_not_ok = predicted_std
+        .iter()
+        .map(|&std| !(std < 1.5 * allowed_noise))
         .collect_vec();
     let std_not_ok_count: usize = std_not_ok.iter().map(|&ok| ok as usize).sum();
-    assert!(std_not_ok_count <= allowed_failures,
-            "Detected large variances ({} over {})\n{:?}", std_not_ok_count, allowed_noise, LocInfo {
-                locs: std_not_ok,
-                xs_test: xs_test.view(),
-                predicted_ys: predicted_ys.view(),
-                expected_ys: expected_ys.view(),
-                predicted_std: predicted_std.view(),
-            })
+    assert!(
+        std_not_ok_count <= allowed_failures,
+        "Detected large variances ({} over {})\n{:?}",
+        std_not_ok_count,
+        allowed_noise,
+        LocInfo {
+            locs: std_not_ok,
+            xs_test: xs_test.view(),
+            predicted_ys: predicted_ys.view(),
+            expected_ys: expected_ys.view(),
+            predicted_std: predicted_std.view(),
+        }
+    );
 }

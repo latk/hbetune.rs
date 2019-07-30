@@ -1,5 +1,5 @@
-use ndarray::prelude::*;
 use itertools::Itertools as _;
+use ndarray::prelude::*;
 
 type Generation = i64;
 
@@ -16,7 +16,8 @@ pub struct Individual<A> {
 }
 
 impl<A> Individual<A>
-where A: Copy
+where
+    A: Copy,
 {
     /// Create a new individual at a certain sample.
     pub fn new(sample: impl Into<Array1<A>>) -> Self {
@@ -33,8 +34,7 @@ where A: Copy
     /// Check whether all write-once fields have been provided.
     /// If true, the object is effectively immutable.
     pub fn is_fully_initialized(&self) -> bool {
-        true
-            && self.gen.is_some()
+        self.gen.is_some()
             && self.prediction.is_some()
             && self.expected_improvement.is_some()
             && self.observation.is_some()
@@ -43,10 +43,14 @@ where A: Copy
 
     /// The input variables at which the experiment was evaluated
     /// or shall be evaluated.
-    pub fn sample(&self) -> ArrayView1<A> { self.sample.view() }
+    pub fn sample(&self) -> ArrayView1<A> {
+        self.sample.view()
+    }
 
     /// The generation in which the Individual was evaluated. Write-once.
-    pub fn gen(&self) -> Option<Generation> { self.gen }
+    pub fn gen(&self) -> Option<Generation> {
+        self.gen
+    }
 
     /// Write the generation in which the Individual was evaluated.
     pub fn set_gen(&mut self, gen: Generation) -> Result<(), Generation> {
@@ -54,7 +58,9 @@ where A: Copy
     }
 
     /// The predicted value (write once).
-    pub fn prediction(&self) -> Option<A> { self.prediction }
+    pub fn prediction(&self) -> Option<A> {
+        self.prediction
+    }
 
     /// Write the predicted value.
     pub fn set_prediction(&mut self, prediction: A) -> Result<(), A> {
@@ -62,7 +68,9 @@ where A: Copy
     }
 
     /// The expected improvement before the Individual was evaluated. Write-once.
-    pub fn expected_improvement(&self) -> Option<A> { self.expected_improvement }
+    pub fn expected_improvement(&self) -> Option<A> {
+        self.expected_improvement
+    }
 
     /// Write the expected improvement.
     pub fn set_expected_improvement(&mut self, ei: A) -> Result<(), A> {
@@ -70,7 +78,9 @@ where A: Copy
     }
 
     /// The observed value (write once).
-    pub fn observation(&self) -> Option<A> { self.observation.clone() }
+    pub fn observation(&self) -> Option<A> {
+        self.observation.clone()
+    }
 
     /// Write the observed value.
     pub fn set_observation(&mut self, observation: A) -> Result<(), A> {
@@ -78,7 +88,9 @@ where A: Copy
     }
 
     /// The observed cost (write once).
-    pub fn cost(&self) -> Option<A> { self.cost.clone() }
+    pub fn cost(&self) -> Option<A> {
+        self.cost.clone()
+    }
 
     /// Write the observed cost.
     pub fn set_cost(&mut self, cost: A) -> Result<(), A> {
@@ -106,11 +118,17 @@ fn fail_if_some<T>(maybe: Option<T>) -> Result<(), T> {
 /// assert_eq!(format!("{:?}", ind),
 ///            "Individual(17.2 @None [1.0 2.0 3.0] prediction: None ei: 0.3 gen: None)");
 /// ```
-impl<A> std::fmt::Debug for Individual<A> where A: std::fmt::Display + std::fmt::Debug + Copy {
+impl<A> std::fmt::Debug for Individual<A>
+where
+    A: std::fmt::Display + std::fmt::Debug + Copy,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         struct FlatOption<T>(Option<T>);
 
-        impl<T> std::fmt::Display for FlatOption<T> where T: std::fmt::Display {
+        impl<T> std::fmt::Display for FlatOption<T>
+        where
+            T: std::fmt::Display,
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match &self.0 {
                     Some(x) => x.fmt(f),
@@ -119,15 +137,18 @@ impl<A> std::fmt::Debug for Individual<A> where A: std::fmt::Display + std::fmt:
             }
         }
 
-        write!(f, "Individual({observation} @{cost:.2} [{sample:?}] \
-                   prediction: {prediction} \
-                   ei: {expected_improvement} \
-                   gen: {gen})",
-               observation = FlatOption(self.observation),
-               cost = FlatOption(self.cost),
-               sample = self.sample.iter().format(" "),
-               prediction = FlatOption(self.prediction),
-               expected_improvement = FlatOption(self.expected_improvement),
-               gen = FlatOption(self.gen))
+        write!(
+            f,
+            "Individual({observation} @{cost:.2} [{sample:?}] \
+             prediction: {prediction} \
+             ei: {expected_improvement} \
+             gen: {gen})",
+            observation = FlatOption(self.observation),
+            cost = FlatOption(self.cost),
+            sample = self.sample.iter().format(" "),
+            prediction = FlatOption(self.prediction),
+            expected_improvement = FlatOption(self.expected_improvement),
+            gen = FlatOption(self.gen),
+        )
     }
 }
