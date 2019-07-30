@@ -42,7 +42,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
         population
             .iter()
             .map(|parent| {
-                let parent_sample_transformed = space.into_transformed(parent.sample().to_owned());
+                let parent_sample_transformed = space.transform_sample(parent.sample().to_owned());
 
                 let candidate_samples: Vec<Array1<A>> = std::iter::from_fn(|| {
                     Some(space.mutate_transformed(parent_sample_transformed.clone(), relscale, rng))
@@ -62,7 +62,6 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                     .collect();
 
                 let i: usize = (0..candidate_ei.len())
-                    .into_iter()
                     .max_by(|&a, &b| {
                         candidate_ei[a]
                             .partial_cmp(&candidate_ei[b])
@@ -70,7 +69,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                     })
                     .expect("there should be a candidate with maximal EI");
 
-                let sample = space.from_transformed(take_vec_item(candidate_samples, i));
+                let sample = space.untransform_sample(take_vec_item(candidate_samples, i));
                 let mut offspring = Individual::new(sample);
                 offspring.set_prediction(candidate_mean[i]).unwrap();
                 offspring
@@ -86,8 +85,7 @@ pub fn expected_improvement(mean: f64, std: f64, fmin: f64) -> f64 {
     use statrs::distribution::{Continuous, Univariate};
     let norm = statrs::distribution::Normal::new(0.0, 1.0).unwrap();
     let z = -(mean - fmin) / std;
-    let ei = -(mean - fmin) * norm.cdf(z) + std * norm.pdf(z);
-    ei
+    -(mean - fmin) * norm.cdf(z) + std * norm.pdf(z)
 }
 
 fn take_vec_item<T>(mut xs: Vec<T>, i: usize) -> T {

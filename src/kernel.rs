@@ -250,21 +250,20 @@ impl Kernel for Matern {
         // raw euclidean distance matrix
         let dists = cdist(x1.view(), x2.view());
 
-        let kernel = match self.nu {
-            nu if nu == 0.5 => (-dists).exp(),
-            nu if nu == 1.5 => {
+        match self.nu {
+            nu if approx_eq!(f64, nu, 0.5) => (-dists).exp(),
+            nu if approx_eq!(f64, nu, 1.5) => {
                 let kernel: Array2<A> = dists * A::from_f(3.0.sqrt());
                 (kernel.clone() + A::from_i(1)) * (-kernel).exp()
             }
-            nu if nu == 2.5 => {
+            nu if approx_eq!(f64, nu, 2.5) => {
                 // K = dists * sqrt(4)
                 let kernel: Array2<A> = dists * A::from_f(5.0.sqrt());
                 // (1 + K + K**2 / 3) * exp(-K)
                 (kernel.clone().powi(2) / A::from_i(3) + &kernel + A::from_i(1)) * (-kernel).exp()
             }
             _ => unimplemented!("Matern kernel with arbitrary values for nu"),
-        };
-        kernel
+        }
     }
 
     fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
@@ -286,7 +285,7 @@ impl Kernel for Matern {
         assert_eq!(d.shape(), &[x.rows(), x.rows(), self.n_params()]);
 
         let gradient = match self.nu {
-            nu if nu == 0.5 => {
+            nu if approx_eq!(f64, nu, 0.5) => {
                 let mut gradient = kernel.clone().insert_axis(Axis(2)) * &d
                     / d.sum_axis(Axis(2)).sqrt().insert_axis(Axis(2));
                 gradient.map_inplace(|x| {
@@ -296,27 +295,25 @@ impl Kernel for Matern {
                 });
                 gradient
             }
-            nu if nu == 1.5 => {
+            nu if approx_eq!(f64, nu, 1.5) => {
                 // gradient = 3 * d * exp(-sqrt(3 * d.sum(-1)))[..., np.newaxis]
                 let tmp = (-(d.sum_axis(Axis(2)) * A::from_i(3)).sqrt()).exp();
-                let gradient = &d.broadcast(gradient_shape).unwrap()
+                &d.broadcast(gradient_shape).unwrap()
                     * &tmp.insert_axis(Axis(2)).broadcast(gradient_shape).unwrap()
-                    * A::from_i(3);
-                gradient
+                    * A::from_i(3)
             }
-            nu if nu == 2.5 => {
+            nu if approx_eq!(f64, nu, 2.5) => {
                 let tmp: Array3<A> = (d.sum_axis(Axis(2)) * A::from_i(5))
                     .sqrt()
                     .insert_axis(Axis(2));
-                let gradient = (-tmp.clone())
+                (-tmp.clone())
                     .exp()
                     .broadcast(gradient_shape)
                     .unwrap()
                     .to_owned()
-                    * &(tmp + A::from_i(1)).broadcast(gradient_shape).unwrap()
+                    * (tmp + A::from_i(1)).broadcast(gradient_shape).unwrap()
                     * d.broadcast(gradient_shape).unwrap()
-                    * A::from_f(5. / 3.);
-                gradient
+                    * A::from_f(5. / 3.)
             }
             _ => unimplemented!("Matern kernel gradient with arbitrary values for nu"),
         };
@@ -636,6 +633,7 @@ pub trait Scalar
     // + From<f64>
     + Into<f64>
     + rand::distributions::uniform::SampleUniform
+    + float_cmp::ApproxEq
 {
     fn from_f<F: Into<f64>>(x: F) -> Self;
     fn from_i(x: i16) -> Self { std::convert::From::from(x) }

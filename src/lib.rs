@@ -1,6 +1,8 @@
 //! A Gaussian Process Guided Tuner
 
 #[macro_use]
+extern crate float_cmp;
+#[macro_use]
 extern crate ndarray;
 extern crate itertools;
 extern crate ndarray_stats;

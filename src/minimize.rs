@@ -171,7 +171,7 @@ where
             relscale_attenuation: 0.9,
             estimator: None,
             acquisition_strategy: None,
-            time_source: Box::new(|| Instant::now()),
+            time_source: Box::new(Instant::now),
             select_via_posterior: false,
             fmin_via_posterior: true,
             n_replacements: 1,
@@ -242,9 +242,7 @@ where
             estimator,
         };
 
-        let result = instance.run(rng, historic_individuals);
-
-        result
+        instance.run(rng, historic_individuals)
     }
 }
 
@@ -298,7 +296,7 @@ where
         let find_fmin = |individuals: &[Individual<A>], model: &Estimator::Model| {
             let fmin_operator = FitnessOperator(model, UsePosterior(config.fmin_via_posterior));
             individuals
-                .into_iter()
+                .iter()
                 .min_by(|a, b| {
                     fmin_operator
                         .compare(a, b)
@@ -346,7 +344,7 @@ where
             );
             assert_eq!(population.len(), offspring.len());
 
-            self.evaluate_all(offspring.as_mut_slice(), rng, generation.into());
+            self.evaluate_all(offspring.as_mut_slice(), rng, generation);
             budget = budget.saturating_sub(offspring.len());
             all_evalutions.extend(offspring.iter().cloned());
 
@@ -365,7 +363,7 @@ where
 
         Ok(OptimizationResult {
             all_individuals: all_evalutions,
-            all_models: all_models,
+            all_models,
             duration: total_duration.elapsed(),
         })
     }
@@ -513,14 +511,11 @@ where
 
         let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 
-        let population =
-            replace_worst_n_individuals(self.config.n_replacements, selected, rejected, |a, b| {
-                fitness_operator
-                    .compare(a, b)
-                    .expect("individuals should be orderable")
-            });
-
-        population
+        replace_worst_n_individuals(self.config.n_replacements, selected, rejected, |a, b| {
+            fitness_operator
+                .compare(a, b)
+                .expect("individuals should be orderable")
+        })
     }
 }
 

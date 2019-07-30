@@ -21,6 +21,6 @@ where
     S: Data<Elem = A>,
     A: Clone + Float,
 {
-    assert!(xs.len() > 0, "at least one dimension required");
+    assert!(!xs.is_empty(), "at least one dimension required");
     xs.mapv(|x| x.powi(2)).sum()
 }

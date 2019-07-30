@@ -36,22 +36,22 @@ pub trait SurrogateModel<A: Scalar> {
     }
 
     fn predict_mean(&self, x: Array1<A>) -> A {
-        let xt = self.space().into_transformed(x);
+        let xt = self.space().transform_sample(x);
         self.predict_mean_transformed(xt)
     }
 
     fn predict_mean_std(&self, x: Array1<A>) -> (A, A) {
-        let xt = self.space().into_transformed(x);
+        let xt = self.space().transform_sample(x);
         self.predict_mean_std_transformed(xt)
     }
 
     fn predict_mean_a(&self, x: Array2<A>) -> Array1<A> {
-        let xt = self.space().into_transformed_a(x);
+        let xt = self.space().transform_sample_a(x);
         self.predict_mean_transformed_a(xt)
     }
 
     fn predict_mean_std_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
-        let xt = self.space().into_transformed_a(x);
+        let xt = self.space().transform_sample_a(x);
         self.predict_mean_std_transformed_a(xt)
     }
 

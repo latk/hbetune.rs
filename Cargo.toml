@@ -5,6 +5,7 @@ authors = ["Lukas Atkinson"]
 edition = "2018"
 
 [dependencies]
+float-cmp = "0.5.2"  # for float equality, needed for Matérn optimization
 ndarray = "0.12.1"  # like NumPy
 ndarray-linalg = { version = "0.11" }  # provides Cholesky decomposition
 ndarray-stats = "0.2.0"  # summary statistics

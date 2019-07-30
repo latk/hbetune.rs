@@ -39,6 +39,12 @@ impl<A> CompositeOutputEventHandler<A> {
     }
 }
 
+impl<A> std::default::Default for CompositeOutputEventHandler<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<A> OutputEventHandler<A> for CompositeOutputEventHandler<A> {
     fn event_new_generation(&mut self, gen: usize, relscale: &[f64]) {
         for logger in &mut self.subloggers {
@@ -78,7 +84,7 @@ pub struct Output<A> {
 }
 
 impl<A> Output<A> {
-    pub fn new(space: &Space) -> Self {
+    pub fn new(_space: &Space) -> Self {
         let base = CompositeOutputEventHandler::new();
         Output {
             base,

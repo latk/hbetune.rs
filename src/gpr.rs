@@ -160,14 +160,14 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
-        let (y_train, y_norm) = YNormalization::to_normalized(y);
-        let x_train = space.into_transformed_a(x);
+        let (y_train, y_norm) = YNormalization::normalized_from_y(y);
+        let x_train = space.transform_sample_a(x);
 
         let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
 
         let (mut kernel, noise) = get_kernel_or_default(prior, amplitude, self)?;
 
-        let (noise, alpha, k_inv, lml) = fit_kernel(
+        let KernelFittingResult { noise, alpha, k_inv, lml } = fit_kernel(
             &mut kernel,
             x_train.clone(),
             y_train.clone(),
@@ -252,11 +252,10 @@ speculate! {
             let mut rng = crate::random::RNG::new_with_seed(SEED);
 
             // precompute stuff
-            let (_noise, alpha, k_inv, _lml) = fit_kernel(
+            let KernelFittingResult { alpha, k_inv, .. } = fit_kernel(
                 &mut kernel, xs.clone(), ys.clone(), &mut rng, N_RESTARTS_OPTIMIZER,
                 BoundedValue::new(1.0, 0.001, 1.0).unwrap(),
             ).expect("fit_kernel() should succeed");
-            eprintln!("fitted kernel {:?} noise {:?}", kernel, _noise);
 
             // perform prediction
             let predict_xs = array![[0.0],[0.25],[0.5],[0.75],[1.0]];
@@ -362,7 +361,7 @@ impl EstimatorGPR {
     }
 }
 
-fn get_kernel_or_default<'a, A: Scalar>(
+fn get_kernel_or_default<A: Scalar>(
     prior: Option<&SurrogateModelGPR<A>>,
     amplitude: BoundedValue<f64>,
     config: &EstimatorGPR,
@@ -400,7 +399,7 @@ impl<A: Scalar> YNormalization<A> {
         A::from_f(0.05)
     }
 
-    fn to_normalized(mut y: Array1<A>) -> (Array1<A>, Self) {
+    fn normalized_from_y(mut y: Array1<A>) -> (Array1<A>, Self) {
         use ndarray_stats::QuantileExt;
 
         // shift the values so that all are positive
@@ -446,14 +445,14 @@ speculate! {
 
         it "has an inverse operation" {
             let original: Array1<f64> = vec![1., 2., 3., 4.].into();
-            let (y, norm) = YNormalization::to_normalized(original.clone());
+            let (y, norm) = YNormalization::normalized_from_y(original.clone());
             let result = norm.y_from_normalized(y);
             assert!(original.all_close(&result, 0.0001));
         }
 
         it "also works with negative numbers" {
             let original: Array1<f64> = vec![-5., 3., 8., -2.].into();
-            let (y, norm) = YNormalization::to_normalized(original.clone());
+            let (y, norm) = YNormalization::normalized_from_y(original.clone());
             let result = norm.y_from_normalized(y);
             assert!(original.all_close(&result, 0.0001));
         }
@@ -487,6 +486,13 @@ fn estimate_amplitude<A: Scalar>(
     BoundedValue::new(start, lo, hi).unwrap()
 }
 
+struct KernelFittingResult<A> {
+    noise: BoundedValue<f64>,
+    alpha: Array1<A>,
+    k_inv: Array2<A>,
+    lml: f64,
+}
+
 /// Assign kernel parameters with maximal log-marginal likelihood.
 ///
 /// The current kernel parameters (theta) are used as an optimization starting point.
@@ -497,7 +503,7 @@ fn fit_kernel<A: Scalar>(
     rng: &mut RNG,
     n_restarts_optimizer: usize,
     noise: BoundedValue<f64>,
-) -> Result<(BoundedValue<f64>, Array1<A>, Array2<A>, f64), Error> {
+) -> Result<KernelFittingResult<A>, Error> {
     let n_observations = x_train.rows();
     assert!(y_train.dim() == n_observations);
 
@@ -517,15 +523,15 @@ fn fit_kernel<A: Scalar>(
         let kernel = kernel.clone().with_clamped_theta(kernel_theta);
         let noise: A = A::from_f(noise_theta.exp());
 
-        let (lml, lml_grad, alpha, factorization) =
+        let LmlResult { lml, lml_gradient, alpha, factorization } =
             match lml_with_gradients(kernel, noise, x_train.view(), y_train.view()) {
                 Some(result) => result,
                 None => {
-                    want_gradient.map(|grad| {
+                    if let Some(grad) = want_gradient {
                         for g in grad {
                             *g = 0.0;
                         }
-                    });
+                    }
                     return std::f64::INFINITY;
                 }
             };
@@ -543,11 +549,11 @@ fn fit_kernel<A: Scalar>(
         }
 
         // negate the lml for minimization and return
-        want_gradient.map(|gradient| {
-            for (out, lg) in gradient.iter_mut().zip(lml_grad) {
+        if let Some(gradient) = want_gradient {
+            for (out, lg) in gradient.iter_mut().zip(lml_gradient) {
                 *out = -lg;
             }
-        });
+        }
         -lml
     };
 
@@ -584,11 +590,18 @@ fn fit_kernel<A: Scalar>(
     // Precompute arrays needed at prediction
     use ndarray_linalg::cholesky::*;
     let mat_k_inv = mat_k_factorization.invc_into().unwrap();
-    Ok((noise, alpha, mat_k_inv, lml))
+    Ok(KernelFittingResult { noise, alpha, k_inv: mat_k_inv, lml })
 }
 
 type CholeskyFactorizedArray<A> =
     ndarray_linalg::cholesky::CholeskyFactorized<ndarray::OwnedRepr<A>>;
+
+struct LmlResult<A> {
+    lml: f64,
+    lml_gradient: Vec<f64>,
+    alpha: Array1<A>,
+    factorization: CholeskyFactorizedArray<A>,
+}
 
 /// calculate the log marginal likelihood and gradients
 /// of a certain kernel/noise configuration
@@ -597,7 +610,7 @@ fn lml_with_gradients<A: Scalar>(
     noise: A,
     x_train: ArrayView2<A>,
     y_train: ArrayView1<A>,
-) -> Option<(f64, Vec<f64>, Array1<A>, CholeskyFactorizedArray<A>)> {
+) -> Option<LmlResult<A>> {
     use ndarray_linalg::cholesky::*;
 
     // calculate combined gradient
@@ -634,7 +647,7 @@ fn lml_with_gradients<A: Scalar>(
             .collect()
     };
 
-    Some((lml, lml_gradient, alpha, factorization))
+    Some(LmlResult { lml, lml_gradient, alpha, factorization })
 }
 
 fn outer<A: Scalar>(a: ArrayView1<A>, b: ArrayView1<A>) -> Array2<A> {

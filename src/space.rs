@@ -5,7 +5,7 @@ use crate::{Individual, Scalar, RNG};
 /// The parameter space that contains feasible solutions.
 /// This space is usually handled in its natural units,
 /// but internally each parameter can be projected into the range 0 to 1 inclusive.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Space {
     params: Vec<Parameter>,
 }
@@ -13,13 +13,17 @@ pub struct Space {
 impl Space {
     /// Create a new parameter space.
     pub fn new() -> Self {
-        let params = Vec::new();
-        Space { params }
+        Space::default()
     }
 
     /// The number of dimensions.
     pub fn len(&self) -> usize {
         self.params.len()
+    }
+
+    // The space is empty if no parameters were provided.
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
     }
 
     /// Add a real-valued parameter.
@@ -35,10 +39,10 @@ impl Space {
     }
 
     /// Project a parameter array in-place into the range 0 to 1 inclusive.
-    pub fn into_transformed_mut<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
+    pub fn transform_sample_inplace<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
         assert!(x.len() == self.len());
         for (x, param) in x.iter_mut().zip(&self.params) {
-            param.into_transformed_mut(x);
+            param.transform_sample_inplace(x);
         }
     }
 
@@ -51,28 +55,28 @@ impl Space {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
-    /// assert_eq!(space.into_transformed(array![-1.0, 7.0]),
+    /// assert_eq!(space.transform_sample(array![-1.0, 7.0]),
     ///            array![0.25, 0.7]);
     /// # }
     /// ```
-    pub fn into_transformed<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
-        self.into_transformed_mut(x.view_mut());
+    pub fn transform_sample<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
+        self.transform_sample_inplace(x.view_mut());
         x
     }
 
     /// Project a matrix of parameter vectors into the range 0 to 1 inclusive.
-    pub fn into_transformed_a<A: Scalar>(&self, mut xs: Array2<A>) -> Array2<A> {
+    pub fn transform_sample_a<A: Scalar>(&self, mut xs: Array2<A>) -> Array2<A> {
         for x in xs.outer_iter_mut() {
-            self.into_transformed_mut(x);
+            self.transform_sample_inplace(x);
         }
         xs
     }
 
     /// Get a parameter vector from a projection in the range 0 to 1 inclusive.
-    pub fn from_transformed_mut<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
+    pub fn untransform_sample_inplace<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
         assert!(x.len() == self.len());
         for (x, param) in x.iter_mut().zip(&self.params) {
-            param.from_transformed_mut(x)
+            param.untransform_sample_inplace(x)
         }
     }
 
@@ -86,12 +90,12 @@ impl Space {
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
     /// let params = array![-1.0, 7.0];
-    /// assert_eq!(space.from_transformed(space.into_transformed(params.clone())),
+    /// assert_eq!(space.untransform_sample(space.transform_sample(params.clone())),
     ///            params);
     /// # }
     /// ```
-    pub fn from_transformed<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
-        self.from_transformed_mut(x.view_mut());
+    pub fn untransform_sample<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
+        self.untransform_sample_inplace(x.view_mut());
         x
     }
 
@@ -102,7 +106,7 @@ impl Space {
     {
         let range = num_traits::zero()..=num_traits::one();
         let sample = Array::from_shape_fn(self.len(), |_| rng.uniform(range.clone()));
-        Individual::new(self.from_transformed(sample))
+        Individual::new(self.untransform_sample(sample))
     }
 
     pub fn mutate_transformed<A: Scalar>(
@@ -135,9 +139,7 @@ fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
 
     let xz = rng.uniform(normal.cdf(az)..=normal.cdf(bz));
 
-    let x = normal.inverse_cdf(xz) * sigma + mu;
-
-    x
+    normal.inverse_cdf(xz) * sigma + mu
 }
 
 #[derive(Debug, Clone)]
@@ -146,15 +148,15 @@ enum Parameter {
 }
 
 impl Parameter {
-    fn into_transformed_mut<A: Scalar>(&self, x: &mut A) {
+    fn transform_sample_inplace<A: Scalar>(&self, x: &mut A) {
         *x = match *self {
-            Parameter::Real { name: _, lo, hi } => (*x - A::from_f(lo)) / A::from_f(hi - lo),
+            Parameter::Real { lo, hi, .. } => (*x - A::from_f(lo)) / A::from_f(hi - lo),
         };
     }
 
-    fn from_transformed_mut<A: Scalar>(&self, x: &mut A) {
+    fn untransform_sample_inplace<A: Scalar>(&self, x: &mut A) {
         *x = match *self {
-            Parameter::Real { name: _, lo, hi } => *x * A::from_f(hi - lo) + A::from_f(lo),
+            Parameter::Real { lo, hi, .. } => *x * A::from_f(hi - lo) + A::from_f(lo),
         };
     }
 }

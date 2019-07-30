@@ -79,7 +79,7 @@ where
 
     /// The observed value (write once).
     pub fn observation(&self) -> Option<A> {
-        self.observation.clone()
+        self.observation
     }
 
     /// Write the observed value.
@@ -89,7 +89,7 @@ where
 
     /// The observed cost (write once).
     pub fn cost(&self) -> Option<A> {
-        self.cost.clone()
+        self.cost
     }
 
     /// Write the observed cost.
