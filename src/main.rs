@@ -54,10 +54,17 @@ enum CliObjective {
 
     /// As the objective function, use a built-in benchmark function.
     #[structopt(name = "function")]
-    Function {
-        /// Name of the function. (sphere)
-        function: BenchFn,
-    },
+    Function(CliBenchFunction),
+}
+
+#[derive(Debug, StructOpt)]
+struct CliBenchFunction {
+    /// Standard deviation of test function noise.
+    #[structopt(long, default_value = "0.0")]
+    noise: f64,
+
+    /// Name of the function. (sphere)
+    function: BenchFn,
 }
 
 impl CliObjective {
@@ -67,7 +74,7 @@ impl CliObjective {
                 cli_template: objective_command,
                 space: space.clone(),
             }),
-            CliObjective::Function { function } => function.to_objective(),
+            CliObjective::Function(f) => Box::new(f),
         }
     }
 }
@@ -88,17 +95,13 @@ impl std::str::FromStr for BenchFn {
     }
 }
 
-impl BenchFn {
-    fn to_objective<A>(&self) -> Box<dyn ggtune::ObjectiveFunction<A>>
-    where
-        A: ggtune::Scalar + Default,
-    {
+impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
+    fn run(&self, xs: ndarray::ArrayView1<f64>, rng: &mut ggtune::RNG) -> (f64, f64) {
         use ggtune::benchfn;
-        match self {
-            BenchFn::Sphere => Box::new(ggtune::ObjectiveFunctionFromFn::new(
-                |xs: ndarray::ArrayView1<A>| benchfn::sphere(xs),
-            )),
-        }
+        let y = match self.function {
+            BenchFn::Sphere => benchfn::sphere(xs),
+        };
+        (rng.normal(y, self.noise), Default::default())
     }
 }
 
