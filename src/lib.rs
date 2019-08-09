@@ -1,6 +1,8 @@
 //! A Gaussian Process Guided Tuner
 
 #[macro_use]
+extern crate failure;
+#[macro_use]
 extern crate float_cmp;
 #[macro_use]
 extern crate ndarray;
@@ -11,6 +13,8 @@ extern crate num_traits;
 extern crate openblas_src;
 extern crate rayon;
 extern crate statrs;
+#[macro_use]
+extern crate structopt;
 
 #[cfg(test)]
 extern crate speculate;
@@ -37,8 +41,10 @@ pub use acquisition::{AcquisitionStrategy, MutationAcquisition};
 pub use gpr::{EstimatorGPR, SurrogateModelGPR};
 pub use individual::Individual;
 pub use kernel::Scalar;
-pub use minimize::{Minimizer, ObjectiveFunction, OptimizationResult};
+pub use minimize::{
+    Minimizer, MinimizerArgs, ObjectiveFunction, ObjectiveFunctionFromFn, OptimizationResult,
+};
 pub use outputs::{CompositeOutputEventHandler, Output, OutputEventHandler};
 pub use random::RNG;
-pub use space::Space;
+pub use space::{Parameter, Space};
 pub use surrogate_model::{Estimator, SurrogateModel};

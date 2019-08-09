@@ -15,13 +15,22 @@ pub trait ObjectiveFunction<A>: Sync {
     fn run<'a>(&self, xs: ArrayView1<'a, A>, rng: &'a mut RNG) -> (A, A);
 }
 
-impl<A, F> ObjectiveFunction<A> for F
+pub struct ObjectiveFunctionFromFn<F>(F);
+
+impl<F> ObjectiveFunctionFromFn<F> {
+    pub fn new(f: F) -> Self {
+        Self(f)
+    }
+}
+
+impl<A, F> ObjectiveFunction<A> for ObjectiveFunctionFromFn<F>
 where
     F: Fn(ArrayView1<A>) -> A + Sync,
     A: Default,
 {
     fn run<'a>(&self, xs: ArrayView1<'a, A>, _rng: &'a mut RNG) -> (A, A) {
-        (self(xs), Default::default())
+        let Self(f) = self;
+        (f(xs), Default::default())
     }
 }
 
@@ -112,55 +121,67 @@ impl<A, Model> OptimizationResult<A, Model> {
 }
 
 /// Configuration for the minimizer.
-pub struct Minimizer<A, Estimator>
-where
-    Estimator: ModelEstimator<A>,
-    A: Scalar,
-{
+#[derive(StructOpt, Debug)]
+#[structopt(rename_all = "kebab")]
+pub struct Minimizer {
     /// How many samples are taken per generation.
+    #[structopt(long, default_value = "10")]
     pub popsize: usize,
 
     /// How many initial samples should be acquired
     /// before model-guided acquisition takes over.
+    #[structopt(long, default_value = "10")]
     pub initial: usize,
 
     /// How many samples may be taken in total per optimization run.
+    #[structopt(long, default_value = "100")]
     pub max_nevals: usize,
 
     /// Standard deviation for creating new samples,
     /// as fraction of each parameter's range.
+    #[structopt(long, default_value = "0.3")]
     pub relscale_initial: f64,
 
     /// Factor by which the relscale is reduced per generation.
+    #[structopt(long, default_value = "0.9")]
     pub relscale_attenuation: f64,
 
-    /// An estimator for the regression model to fit the response surface.
-    pub estimator: Option<Estimator>,
+    /// The fitness function used to select which samples proceed to the next generation.
+    /// If posterior/prediction/model: use trained model.
+    /// If observation: use observed value incl. noise.
+    #[structopt(long, default_value = "observation")]
+    pub select_via: FitnessVia,
 
-    /// How new samples are acquired.
-    pub acquisition_strategy: Option<Box<dyn AcquisitionStrategy<A>>>,
-
-    /// Whether the model prediction should be used as a fitness function
-    /// when selecting which samples proceed to the next generation.
-    /// If false, the objective's observed value incl. noise is used.
-    pub select_via_posterior: bool,
-
-    /// Whether the model prediction is used
-    /// to find the current best point during optimization.
-    /// If false, the objective's observed value incl. noise is used.
-    pub fmin_via_posterior: bool,
+    /// How to select the minimum fitness (fmin).
+    /// If posterior/prediction/model: use trained model.
+    /// If observation: use observed value incl. noise.
+    #[structopt(long, default_value = "prediction")]
+    pub fmin_via: FitnessVia,
 
     /// How many random samples are suggested per generation.
     /// Usually, new samples are created by random mutations of existing samples.
+    #[structopt(long, default_value = "1")]
     pub n_replacements: usize,
-
-    pub time_source: Box<TimeSource>,
 }
 
-impl<A, Estimator> Default for Minimizer<A, Estimator>
-where
-    Estimator: ModelEstimator<A>,
-    A: Scalar,
+#[derive(Debug, Clone, Copy)]
+pub enum FitnessVia {
+    Prediction,
+    Observation,
+}
+
+impl std::str::FromStr for FitnessVia {
+    type Err = failure::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "posterior" | "prediction" | "model" => Ok(FitnessVia::Prediction),
+            "observation" => Ok(FitnessVia::Observation),
+            _ => bail!("expected posterior/prediction/model or observation, but got: {:?}", s),
+        }
+    }
+}
+
+impl Default for Minimizer
 {
     fn default() -> Self {
         Self {
@@ -169,41 +190,67 @@ where
             max_nevals: 100,
             relscale_initial: 0.3,
             relscale_attenuation: 0.9,
-            estimator: None,
-            acquisition_strategy: None,
-            time_source: Box::new(Instant::now),
-            select_via_posterior: false,
-            fmin_via_posterior: true,
+            select_via: FitnessVia::Observation,
+            fmin_via: FitnessVia::Prediction,
             n_replacements: 1,
         }
     }
 }
 
-impl<A, Estimator> Minimizer<A, Estimator>
-where
-    Estimator: ModelEstimator<A>,
-    A: Scalar,
-{
-    /// Minimize the objective `objective(sample, rng) -> (value, cost)`.
-    ///
-    /// outputs: controls what information is printed during optimization.
+pub struct MinimizerArgs<A, Estimator> {
+    pub estimator: Option<Estimator>,
+
+    pub acquisition_strategy: Option<Box<dyn AcquisitionStrategy<A>>>,
+
+    /// Controls what information is printed during optimization.
     /// Can e.g. be used to save evaluations in a CSV file.
-    ///
-    /// historic_individuals: previous evaluations of the same objective/space
+    pub outputs: Option<Box<dyn OutputEventHandler<A>>>,
+
+    /// Previous evaluations of the same objective/space
     /// that should be incorporated into the model.
     /// Can be useful in order to benefit from previous minimization runs.
     /// Potential drawbacks include a biased model,
     /// and that the tuner slows down with additional samples.
     /// Constraints: all individuals must be fully initialized,
     /// and declare the -1th generation.
-    pub fn minimize(
-        mut self,
+    pub historic_individuals: Vec<Individual<A>>,
+
+    pub time_source: Option<Box<TimeSource>>,
+}
+
+impl<A, Estimator> Default for MinimizerArgs<A, Estimator> {
+    fn default() -> Self {
+        Self {
+            estimator: None,
+            acquisition_strategy: None,
+            outputs: None,
+            historic_individuals: vec![],
+            time_source: None,
+        }
+    }
+}
+
+impl Minimizer {
+    /// Minimize the objective `objective(sample, rng) -> (value, cost)`.
+    pub fn minimize<A, Estimator>(
+        self,
         objective: &dyn ObjectiveFunction<A>,
         space: Space,
         rng: &mut RNG,
-        outputs: Option<Box<dyn OutputEventHandler<A>>>,
-        historic_individuals: impl IntoIterator<Item = Individual<A>>,
-    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
+        args: MinimizerArgs<A, Estimator>,
+    ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error>
+    where
+        A: Scalar,
+        Estimator: ModelEstimator<A>
+    {
+        let MinimizerArgs {
+            estimator,
+            acquisition_strategy,
+            outputs,
+            historic_individuals,
+            time_source,
+        } = args;
+
         assert!(
             self.initial + self.popsize <= self.max_nevals,
             "evaluation budget {max_nevals} too small with {initial}+n*{popsize} evaluations",
@@ -212,16 +259,15 @@ where
             popsize = self.popsize
         );
 
-        let acquisition_strategy = self
-            .acquisition_strategy
-            .take()
+        let acquisition_strategy = acquisition_strategy
             .unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
 
         let outputs = outputs.unwrap_or_else(|| Box::new(Output::new(&space)));
 
-        let estimator = self
-            .estimator
-            .take()
+        let time_source = time_source
+            .unwrap_or_else(|| Box::new(Instant::now));
+
+        let estimator = estimator
             .unwrap_or_else(|| Estimator::new(&space));
 
         let historic_individuals = Vec::from_iter(historic_individuals);
@@ -239,6 +285,7 @@ where
             space,
             outputs: outputs.into(),
             acquisition_strategy,
+            time_source,
             estimator,
         };
 
@@ -251,11 +298,12 @@ where
     Estimator: ModelEstimator<A>,
     A: Scalar,
 {
-    config: Minimizer<A, Estimator>,
+    config: Minimizer,
     objective: &'life dyn ObjectiveFunction<A>,
     space: Space,
     outputs: RefCell<Box<dyn OutputEventHandler<A>>>,
     acquisition_strategy: Box<dyn AcquisitionStrategy<A>>,
+    time_source: Box<TimeSource>,
     estimator: Estimator,
 }
 
@@ -271,7 +319,7 @@ where
     ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
         let config = &self.config;
 
-        let total_duration = config.time_source.as_ref()();
+        let total_duration = self.time_source.as_ref()();
 
         let mut population = self.make_initial_population(rng);
 
@@ -294,7 +342,7 @@ where
         all_models.push(self.fit_next_model(all_evalutions.as_slice(), 0, None, rng)?);
 
         let find_fmin = |individuals: &[Individual<A>], model: &Estimator::Model| {
-            let fmin_operator = FitnessOperator(model, UsePosterior(config.fmin_via_posterior));
+            let fmin_operator = FitnessOperator(model, config.fmin_via);
             individuals
                 .iter()
                 .min_by(|a, b| {
@@ -375,7 +423,7 @@ where
     }
 
     fn evaluate_all(&self, individuals: &mut [Individual<A>], rng: &mut RNG, generation: u16) {
-        let timer = self.config.time_source.as_ref()();
+        let timer = self.time_source.as_ref()();
         let objective = self.objective;
 
         let rngs = individuals
@@ -410,7 +458,7 @@ where
         prev_model: Option<&Estimator::Model>,
         rng: &mut RNG,
     ) -> Result<Estimator::Model, Estimator::Error> {
-        let timer = self.config.time_source.as_ref()();
+        let timer = self.time_source.as_ref()();
 
         use ndarray::prelude::*;
 
@@ -449,7 +497,7 @@ where
     ) -> Vec<Individual<A>> {
         // Sort the individuals.
         let fitness_operator =
-            FitnessOperator(model, UsePosterior(self.config.select_via_posterior));
+            FitnessOperator(model, self.config.select_via);
         population.sort_by(|a, b| {
             fitness_operator
                 .compare(a, b)
@@ -487,7 +535,7 @@ where
         fmin: A,
         relscale: &[f64],
     ) -> Vec<Individual<A>> {
-        let timer = self.config.time_source.as_ref()();
+        let timer = self.time_source.as_ref()();
 
         let offspring =
             self.acquisition_strategy
@@ -507,7 +555,7 @@ where
         model: &Estimator::Model,
     ) -> Vec<Individual<A>> {
         let fitness_operator =
-            FitnessOperator(model, UsePosterior(self.config.select_via_posterior));
+            FitnessOperator(model, self.config.select_via);
 
         let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 
@@ -520,21 +568,17 @@ where
 }
 
 #[derive(Clone, Copy)]
-struct UsePosterior(bool);
-
-#[derive(Clone, Copy)]
-struct FitnessOperator<'life, A>(&'life SurrogateModel<A>, UsePosterior);
+struct FitnessOperator<'life, A>(&'life SurrogateModel<A>, FitnessVia);
 
 impl<'life, A> FitnessOperator<'life, A> {
     fn get_fitness(&self, ind: &Individual<A>) -> Option<A>
     where
         A: Scalar,
     {
-        let &FitnessOperator(ref model, UsePosterior(use_posterior)) = self;
-        if use_posterior {
-            Some(model.predict_mean(ind.sample().to_owned()))
-        } else {
-            ind.observation()
+        let &FitnessOperator(ref model, fitness_via) = self;
+        match fitness_via {
+            FitnessVia::Prediction => Some(model.predict_mean(ind.sample().to_owned())),
+            FitnessVia::Observation => ind.observation(),
         }
     }
 

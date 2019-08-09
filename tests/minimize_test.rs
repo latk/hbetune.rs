@@ -11,11 +11,12 @@ use ndarray::prelude::*;
 #[test]
 fn sphere_d2_f64() {
     run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
         |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
         904827189,
         &[array![0.0, 0.0]],
         0.2,
-        |minimizer: &mut Minimizer<f64, EstimatorGPR>, space| {
+        |space, minimizer, _args| {
             minimizer.max_nevals = 40;
             space.add_real_parameter("x1", -2.0, 3.0);
             space.add_real_parameter("x2", -3.0, 2.0);
@@ -26,11 +27,12 @@ fn sphere_d2_f64() {
 #[test]
 fn sphere_d2_f32() {
     run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
         |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
         37895438,
         &[array![0.0, 0.0]],
         0.2,
-        |minimizer: &mut Minimizer<f64, EstimatorGPR>, space| {
+        |space, minimizer, _args| {
             minimizer.max_nevals = 40;
             space.add_real_parameter("x1", -2.0, 3.0);
             space.add_real_parameter("x2", -3.0, 2.0);
@@ -41,11 +43,12 @@ fn sphere_d2_f32() {
 #[test]
 fn sphere_d2_edge() {
     run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
         |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
         8345729,
         &[array![0.1, 0.0]],
         0.2,
-        |minimizer: &mut Minimizer<f64, EstimatorGPR>, space| {
+        |space, minimizer, _args| {
             minimizer.max_nevals = 50;
             space.add_real_parameter("x1", 0.1, 4.0);
             space.add_real_parameter("x2", -2.0, 2.0);
@@ -53,8 +56,21 @@ fn sphere_d2_edge() {
     );
 }
 
-fn run_minimize_test<A, Model, SetupFn>(
-    objective: impl ggtune::ObjectiveFunction<A>,
+struct Types<A, Model> {
+    marker: std::marker::PhantomData<(A, Model)>,
+}
+
+impl<A, Model> Default for Types<A, Model> {
+    fn default() -> Self {
+        Self {
+            marker: std::marker::PhantomData::default(),
+        }
+    }
+}
+
+fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
+    _types: Types<A, Model>,
+    objective: ObjectiveFn,
     rng_seed: usize,
     ideal: &[Array1<A>],
     max_distance: f64,
@@ -62,18 +78,20 @@ fn run_minimize_test<A, Model, SetupFn>(
 ) where
     A: ggtune::Scalar,
     Model: ggtune::Estimator<A>,
-    SetupFn: Fn(&mut ggtune::Minimizer<A, Model>, &mut ggtune::Space),
+    ObjectiveFn: ggtune::ObjectiveFunction<A>,
+    SetupFn: Fn(&mut ggtune::Space, &mut ggtune::Minimizer, &mut ggtune::MinimizerArgs<A, Model>),
 {
     assert!(!ideal.is_empty(), "a slice of ideal points is required");
 
     let mut rng = ggtune::RNG::new_with_seed(rng_seed);
 
-    let mut minimizer = ggtune::Minimizer::<A, Model>::default();
+    let mut minimizer = ggtune::Minimizer::default();
     let mut space = ggtune::Space::new();
-    setup(&mut minimizer, &mut space);
+    let mut args = ggtune::MinimizerArgs::default();
+    setup(&mut space, &mut minimizer, &mut args);
 
     let result = minimizer
-        .minimize(&objective, space, &mut rng, None, vec![])
+        .minimize(&objective, space, &mut rng, args)
         .expect("minimization should proceed successfully");
 
     let guess: Array1<A> = result
