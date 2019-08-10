@@ -176,13 +176,15 @@ impl std::str::FromStr for FitnessVia {
         match s {
             "posterior" | "prediction" | "model" => Ok(FitnessVia::Prediction),
             "observation" => Ok(FitnessVia::Observation),
-            _ => bail!("expected posterior/prediction/model or observation, but got: {:?}", s),
+            _ => bail!(
+                "expected posterior/prediction/model or observation, but got: {:?}",
+                s
+            ),
         }
     }
 }
 
-impl Default for Minimizer
-{
+impl Default for Minimizer {
     fn default() -> Self {
         Self {
             popsize: 10,
@@ -241,7 +243,7 @@ impl Minimizer {
     ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error>
     where
         A: Scalar,
-        Estimator: ModelEstimator<A>
+        Estimator: ModelEstimator<A>,
     {
         let MinimizerArgs {
             estimator,
@@ -259,16 +261,14 @@ impl Minimizer {
             popsize = self.popsize
         );
 
-        let acquisition_strategy = acquisition_strategy
-            .unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
+        let acquisition_strategy =
+            acquisition_strategy.unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
 
         let outputs = outputs.unwrap_or_else(|| Box::new(Output::new(&space)));
 
-        let time_source = time_source
-            .unwrap_or_else(|| Box::new(Instant::now));
+        let time_source = time_source.unwrap_or_else(|| Box::new(Instant::now));
 
-        let estimator = estimator
-            .unwrap_or_else(|| Estimator::new(&space));
+        let estimator = estimator.unwrap_or_else(|| Estimator::new(&space));
 
         let historic_individuals = Vec::from_iter(historic_individuals);
 
@@ -496,8 +496,7 @@ where
         rng: &mut RNG,
     ) -> Vec<Individual<A>> {
         // Sort the individuals.
-        let fitness_operator =
-            FitnessOperator(model, self.config.select_via);
+        let fitness_operator = FitnessOperator(model, self.config.select_via);
         population.sort_by(|a, b| {
             fitness_operator
                 .compare(a, b)
@@ -554,8 +553,7 @@ where
         offspring: Vec<Individual<A>>,
         model: &Estimator::Model,
     ) -> Vec<Individual<A>> {
-        let fitness_operator =
-            FitnessOperator(model, self.config.select_via);
+        let fitness_operator = FitnessOperator(model, self.config.select_via);
 
         let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 

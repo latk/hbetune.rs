@@ -168,15 +168,13 @@ impl Kernel for ConstantKernel {
     }
 
     fn with_theta(self, theta: &[f64]) -> Result<Self, BoundsError<f64>> {
-        let constant = unpack_theta_one(theta)
-            .expect("theta slice must contain exactly one value");
+        let constant = unpack_theta_one(theta).expect("theta slice must contain exactly one value");
         let constant = self.constant.with_value(constant.exp())?;
         Ok(Self::new(constant))
     }
 
     fn with_clamped_theta(self, theta: &[f64]) -> Self {
-        let constant = unpack_theta_one(theta)
-            .expect("theta slice must contain exactly one value");
+        let constant = unpack_theta_one(theta).expect("theta slice must contain exactly one value");
         let constant = self.constant.with_clamped_value(constant.exp());
         Self::new(constant)
     }

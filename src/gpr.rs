@@ -167,7 +167,12 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
 
         let (mut kernel, noise) = get_kernel_or_default(prior, amplitude, self)?;
 
-        let KernelFittingResult { noise, alpha, k_inv, lml } = fit_kernel(
+        let KernelFittingResult {
+            noise,
+            alpha,
+            k_inv,
+            lml,
+        } = fit_kernel(
             &mut kernel,
             x_train.clone(),
             y_train.clone(),
@@ -523,18 +528,22 @@ fn fit_kernel<A: Scalar>(
         let kernel = kernel.clone().with_clamped_theta(kernel_theta);
         let noise: A = A::from_f(noise_theta.exp());
 
-        let LmlResult { lml, lml_gradient, alpha, factorization } =
-            match lml_with_gradients(kernel, noise, x_train.view(), y_train.view()) {
-                Some(result) => result,
-                None => {
-                    if let Some(grad) = want_gradient {
-                        for g in grad {
-                            *g = 0.0;
-                        }
+        let LmlResult {
+            lml,
+            lml_gradient,
+            alpha,
+            factorization,
+        } = match lml_with_gradients(kernel, noise, x_train.view(), y_train.view()) {
+            Some(result) => result,
+            None => {
+                if let Some(grad) = want_gradient {
+                    for g in grad {
+                        *g = 0.0;
                     }
-                    return std::f64::INFINITY;
                 }
-            };
+                return std::f64::INFINITY;
+            }
+        };
 
         // capture optimal theta incl already computed matrices
         let caplml = capture.borrow().as_ref().map(|cap| cap.lml);
@@ -590,7 +599,12 @@ fn fit_kernel<A: Scalar>(
     // Precompute arrays needed at prediction
     use ndarray_linalg::cholesky::*;
     let mat_k_inv = mat_k_factorization.invc_into().unwrap();
-    Ok(KernelFittingResult { noise, alpha, k_inv: mat_k_inv, lml })
+    Ok(KernelFittingResult {
+        noise,
+        alpha,
+        k_inv: mat_k_inv,
+        lml,
+    })
 }
 
 type CholeskyFactorizedArray<A> =
@@ -647,7 +661,12 @@ fn lml_with_gradients<A: Scalar>(
             .collect()
     };
 
-    Some(LmlResult { lml, lml_gradient, alpha, factorization })
+    Some(LmlResult {
+        lml,
+        lml_gradient,
+        alpha,
+        factorization,
+    })
 }
 
 fn outer<A: Scalar>(a: ArrayView1<A>, b: ArrayView1<A>) -> Array2<A> {

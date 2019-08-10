@@ -161,12 +161,12 @@ fn run_command_as_objective(space: &ggtune::Space, template: &[&str], xs: &[f64]
     use std::process::*;
 
     let mut args = HashMap::new();
-    for (param, value) in space.params().into_iter().zip_eq(xs) {
+    for (param, value) in space.params().iter().zip_eq(xs) {
         args.insert(param.name().to_owned(), value);
     }
 
     let processed_cmd_args = template
-        .into_iter()
+        .iter()
         .map(|template| {
             strfmt::strfmt(template, &args)
                 .expect("filling in objective command placeholders must succeed")
@@ -182,7 +182,7 @@ fn run_command_as_objective(space: &ggtune::Space, template: &[&str], xs: &[f64]
             .expect("objective command needs a command name"),
     );
 
-    while let Some(arg) = processed_cmd_args.next() {
+    for arg in processed_cmd_args {
         command.arg(arg);
     }
 

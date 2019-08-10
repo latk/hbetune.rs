@@ -181,21 +181,28 @@ impl std::str::FromStr for Parameter {
 
     fn from_str(s: &str) -> Result<Parameter, Self::Err> {
         use failure::ResultExt as _;
-        let err_too_few_items =
-            || format_err!("too few items, expected: '<name> <type> <...>' but got: {}", s);
-        let err_real_too_few_items =
-            || format_err!("too few items, expected: '<name> real <lo> <hi>' but got: {}", s);
-        let err_real_too_many_items =
-            || format_err!("too many items, expected: '<name> real <lo> <hi>' but got: {}", s);
+        let err_too_few_items = || {
+            format_err!(
+                "too few items, expected: '<name> <type> <...>' but got: {}",
+                s
+            )
+        };
+        let err_real_too_few_items = || {
+            format_err!(
+                "too few items, expected: '<name> real <lo> <hi>' but got: {}",
+                s
+            )
+        };
+        let err_real_too_many_items = || {
+            format_err!(
+                "too many items, expected: '<name> real <lo> <hi>' but got: {}",
+                s
+            )
+        };
 
         let mut items = s.split_whitespace();
-        let name: String = items
-            .next()
-            .ok_or_else(err_too_few_items)?
-            .to_owned();
-        let the_type: &str = items
-            .next()
-            .ok_or_else(err_too_few_items)?;
+        let name: String = items.next().ok_or_else(err_too_few_items)?.to_owned();
+        let the_type: &str = items.next().ok_or_else(err_too_few_items)?;
         match the_type {
             "real" => {
                 let lo = items
@@ -210,7 +217,7 @@ impl std::str::FromStr for Parameter {
                     .parse::<f64>()
                     .with_context(|err| format!("while parsing <hi>: {}", err))?;
 
-                if !(items.next().is_none()) {
+                if items.next().is_some() {
                     return Err(err_real_too_many_items());
                 }
 
@@ -220,4 +227,3 @@ impl std::str::FromStr for Parameter {
         }
     }
 }
-
