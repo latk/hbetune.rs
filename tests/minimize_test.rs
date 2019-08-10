@@ -4,7 +4,7 @@ extern crate ggtune;
 extern crate itertools;
 extern crate noisy_float;
 
-use ggtune::{EstimatorGPR, Minimizer};
+use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
@@ -12,7 +12,7 @@ use ndarray::prelude::*;
 fn sphere_d2_f64() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
+        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
         904827189,
         &[array![0.0, 0.0]],
         0.2,
@@ -28,7 +28,7 @@ fn sphere_d2_f64() {
 fn sphere_d2_f32() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
+        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
         37895438,
         &[array![0.0, 0.0]],
         0.2,
@@ -44,7 +44,7 @@ fn sphere_d2_f32() {
 fn sphere_d2_edge() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        |xs: ArrayView1<_>| ggtune::benchfn::sphere(xs),
+        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
         8345729,
         &[array![0.1, 0.0]],
         0.2,
