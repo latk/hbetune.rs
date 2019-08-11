@@ -16,6 +16,7 @@ nlopt = "0.5.1"  # for optimization algos, used for model fitting
 noisy_float = "0.1.11"  # needed for quantiles and for convenient sorting
 num-traits = "0.2.8"  # provides traits that describe floatishness
 openblas-src = "0.7.0"  # statically link OpenBLAS
+prettytable-rs = "0.8.0"  # for human-readable CLI output
 rayon = "1.1"  # for simple multi-threading
 statrs = "0.11.0"  # for random distributions
 strfmt = "0.1.6"  # for text substitution of command line params

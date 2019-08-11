@@ -1,6 +1,6 @@
 use crate::{AcquisitionStrategy, MutationAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
-use crate::{Individual, Output, OutputEventHandler, Scalar, Space, RNG};
+use crate::{Individual, OutputEventHandler, Scalar, Space, RNG};
 
 use std::cell::RefCell;
 use std::iter::FromIterator as _;
@@ -199,14 +199,14 @@ impl Default for Minimizer {
     }
 }
 
-pub struct MinimizerArgs<A, Estimator> {
+pub struct MinimizerArgs<'life, A, Estimator> {
     pub estimator: Option<Estimator>,
 
     pub acquisition_strategy: Option<Box<dyn AcquisitionStrategy<A>>>,
 
     /// Controls what information is printed during optimization.
     /// Can e.g. be used to save evaluations in a CSV file.
-    pub outputs: Option<Box<dyn OutputEventHandler<A>>>,
+    pub output: Box<dyn OutputEventHandler<A> + 'life>,
 
     /// Previous evaluations of the same objective/space
     /// that should be incorporated into the model.
@@ -220,12 +220,13 @@ pub struct MinimizerArgs<A, Estimator> {
     pub time_source: Option<Box<TimeSource>>,
 }
 
-impl<A, Estimator> Default for MinimizerArgs<A, Estimator> {
+impl<A, Estimator> Default for MinimizerArgs<'static, A, Estimator> {
     fn default() -> Self {
+        use crate::outputs::NullOutputEventHandler;
         Self {
             estimator: None,
             acquisition_strategy: None,
-            outputs: None,
+            output: Box::new(NullOutputEventHandler),
             historic_individuals: vec![],
             time_source: None,
         }
@@ -234,12 +235,12 @@ impl<A, Estimator> Default for MinimizerArgs<A, Estimator> {
 
 impl Minimizer {
     /// Minimize the objective `objective(sample, rng) -> (value, cost)`.
-    pub fn minimize<A, Estimator>(
+    pub fn minimize<'life, A, Estimator>(
         self,
-        objective: &dyn ObjectiveFunction<A>,
+        objective: &'life dyn ObjectiveFunction<A>,
         space: Space,
-        rng: &mut RNG,
-        args: MinimizerArgs<A, Estimator>,
+        rng: &'life mut RNG,
+        args: MinimizerArgs<'life, A, Estimator>,
     ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error>
     where
         A: Scalar,
@@ -248,7 +249,7 @@ impl Minimizer {
         let MinimizerArgs {
             estimator,
             acquisition_strategy,
-            outputs,
+            output,
             historic_individuals,
             time_source,
         } = args;
@@ -263,8 +264,6 @@ impl Minimizer {
 
         let acquisition_strategy =
             acquisition_strategy.unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
-
-        let outputs = outputs.unwrap_or_else(|| Box::new(Output::new(&space)));
 
         let time_source = time_source.unwrap_or_else(|| Box::new(Instant::now));
 
@@ -283,7 +282,7 @@ impl Minimizer {
             config: self,
             objective,
             space,
-            outputs: outputs.into(),
+            outputs: output.into(),
             acquisition_strategy,
             time_source,
             estimator,
@@ -301,8 +300,8 @@ where
     config: Minimizer,
     objective: &'life dyn ObjectiveFunction<A>,
     space: Space,
-    outputs: RefCell<Box<dyn OutputEventHandler<A>>>,
-    acquisition_strategy: Box<dyn AcquisitionStrategy<A>>,
+    outputs: RefCell<Box<dyn OutputEventHandler<A> + 'life>>,
+    acquisition_strategy: Box<dyn AcquisitionStrategy<A> + 'life>,
     time_source: Box<TimeSource>,
     estimator: Estimator,
 }
