@@ -68,7 +68,10 @@ struct CliBenchFunction {
 }
 
 impl CliObjective {
-    fn into_objective(self, space: &ggtune::Space) -> Box<dyn ggtune::ObjectiveFunction<f64>> {
+    fn into_objective<'a>(
+        self,
+        space: &ggtune::Space,
+    ) -> Box<dyn ggtune::ObjectiveFunction<f64> + 'a> {
         match self {
             CliObjective::Command { objective_command } => Box::new(
                 objective_shell::RunCommandAsObjective::new(objective_command, space.clone()),
@@ -113,9 +116,7 @@ fn main() {
 }
 
 fn command_run(cfg: CliCommandRun) {
-    use ggtune::{
-        EstimatorGPR, HumanReadableIndividualsOutput, MinimizerArgs, ObjectiveFunction, Output,
-    };
+    use ggtune::{EstimatorGPR, HumanReadableIndividualsOutput, MinimizerArgs, ObjectiveFunction};
     let CliCommandRun {
         param: params,
         seed,
@@ -132,16 +133,11 @@ fn command_run(cfg: CliCommandRun) {
 
     let objective: Box<dyn ObjectiveFunction<f64>> = objective.into_objective(&space);
 
-    let mut output = Output::new();
-    output.add(Box::new(HumanReadableIndividualsOutput::new(
+    let mut args = MinimizerArgs::<f64, EstimatorGPR>::default();
+    args.output.add(HumanReadableIndividualsOutput::new(
         std::io::stdout(),
         &space,
-    )));
-
-    let args: MinimizerArgs<f64, EstimatorGPR> = MinimizerArgs {
-        output: Box::new(output),
-        ..Default::default()
-    };
+    ));
 
     let result = minimizer
         .minimize(objective.as_ref(), space, &mut rng, args)

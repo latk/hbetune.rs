@@ -1,8 +1,7 @@
 use crate::{AcquisitionStrategy, MutationAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
-use crate::{Individual, OutputEventHandler, Scalar, Space, RNG};
+use crate::{Individual, Output, OutputEventHandler as _, Scalar, Space, RNG};
 
-use std::cell::RefCell;
 use std::iter::FromIterator as _;
 use std::time::{Duration, Instant};
 
@@ -206,7 +205,7 @@ pub struct MinimizerArgs<'life, A, Estimator> {
 
     /// Controls what information is printed during optimization.
     /// Can e.g. be used to save evaluations in a CSV file.
-    pub output: Box<dyn OutputEventHandler<A> + 'life>,
+    pub output: Output<'life, A>,
 
     /// Previous evaluations of the same objective/space
     /// that should be incorporated into the model.
@@ -220,13 +219,12 @@ pub struct MinimizerArgs<'life, A, Estimator> {
     pub time_source: Option<Box<TimeSource>>,
 }
 
-impl<A, Estimator> Default for MinimizerArgs<'static, A, Estimator> {
+impl<A, Estimator> Default for MinimizerArgs<'_, A, Estimator> {
     fn default() -> Self {
-        use crate::outputs::NullOutputEventHandler;
         Self {
             estimator: None,
             acquisition_strategy: None,
-            output: Box::new(NullOutputEventHandler),
+            output: Output::new(),
             historic_individuals: vec![],
             time_source: None,
         }
@@ -249,7 +247,7 @@ impl Minimizer {
         let MinimizerArgs {
             estimator,
             acquisition_strategy,
-            output,
+            mut output,
             historic_individuals,
             time_source,
         } = args;
@@ -282,13 +280,12 @@ impl Minimizer {
             config: self,
             objective,
             space,
-            outputs: output.into(),
             acquisition_strategy,
             time_source,
             estimator,
         };
 
-        instance.run(rng, historic_individuals)
+        instance.run(rng, &mut output, historic_individuals)
     }
 }
 
@@ -300,7 +297,6 @@ where
     config: Minimizer,
     objective: &'life dyn ObjectiveFunction<A>,
     space: Space,
-    outputs: RefCell<Box<dyn OutputEventHandler<A> + 'life>>,
     acquisition_strategy: Box<dyn AcquisitionStrategy<A> + 'life>,
     time_source: Box<TimeSource>,
     estimator: Estimator,
@@ -312,8 +308,9 @@ where
     A: Scalar,
 {
     fn run(
-        &self,
+        self,
         rng: &mut RNG,
+        output: &mut Output<'life, A>,
         historic_individuals: Vec<Individual<A>>,
     ) -> Result<OptimizationResult<A, Estimator::Model>, Estimator::Error> {
         let config = &self.config;
@@ -334,11 +331,11 @@ where
             ind.set_expected_improvement(A::from_f(0.0)).unwrap();
         }
 
-        self.evaluate_all(population.as_mut_slice(), rng, 0);
+        self.evaluate_all(population.as_mut_slice(), rng, output, 0);
         budget = budget.saturating_sub(population.len());
         all_evalutions.extend(population.iter().cloned());
 
-        all_models.push(self.fit_next_model(all_evalutions.as_slice(), 0, None, rng)?);
+        all_models.push(self.fit_next_model(all_evalutions.as_slice(), 0, None, rng, output)?);
 
         let find_fmin = |individuals: &[Individual<A>], model: &Estimator::Model| {
             let fmin_operator = FitnessOperator(model, config.fmin_via);
@@ -378,20 +375,19 @@ where
                 .map(|scale| clip(*scale, None, Some(relscale_bound)))
                 .collect_vec();
 
-            self.outputs
-                .borrow_mut()
-                .event_new_generation(generation.into(), relscale.as_slice());
+            output.event_new_generation(generation.into(), relscale.as_slice());
 
             let mut offspring = self.acquire(
                 population.as_slice(),
                 &model,
                 rng,
+                output,
                 fmin,
                 relscale.as_slice(),
             );
             assert_eq!(population.len(), offspring.len());
 
-            self.evaluate_all(offspring.as_mut_slice(), rng, generation);
+            self.evaluate_all(offspring.as_mut_slice(), rng, output, generation);
             budget = budget.saturating_sub(offspring.len());
             all_evalutions.extend(offspring.iter().cloned());
 
@@ -400,6 +396,7 @@ where
                 generation.into(),
                 Some(model),
                 rng,
+                output,
             )?;
             all_models.push(next_model);
             let model = all_models.last().unwrap();
@@ -421,7 +418,13 @@ where
             .collect_vec()
     }
 
-    fn evaluate_all(&self, individuals: &mut [Individual<A>], rng: &mut RNG, generation: u16) {
+    fn evaluate_all(
+        &self,
+        individuals: &mut [Individual<A>],
+        rng: &mut RNG,
+        output: &mut Output<A>,
+        generation: u16,
+    ) {
         let timer = self.time_source.as_ref()();
         let objective = self.objective;
 
@@ -445,9 +448,7 @@ where
                 assert!(ind.is_fully_initialized());
             });
 
-        self.outputs
-            .borrow_mut()
-            .event_evaluations_completed(individuals, timer.elapsed());
+        output.event_evaluations_completed(individuals, timer.elapsed());
     }
 
     fn fit_next_model(
@@ -456,6 +457,7 @@ where
         gen: usize,
         prev_model: Option<&Estimator::Model>,
         rng: &mut RNG,
+        output: &mut Output<A>,
     ) -> Result<Estimator::Model, Estimator::Error> {
         let timer = self.time_source.as_ref()();
 
@@ -480,9 +482,7 @@ where
             .estimator
             .estimate(xs, ys, self.space.clone(), prev_model, rng)?;
 
-        self.outputs
-            .borrow_mut()
-            .event_model_trained(gen, &model, timer.elapsed());
+        output.event_model_trained(gen, &model, timer.elapsed());
 
         Ok(model)
     }
@@ -530,6 +530,7 @@ where
         population: &[Individual<A>],
         model: &Estimator::Model,
         rng: &mut RNG,
+        output: &mut Output<A>,
         fmin: A,
         relscale: &[f64],
     ) -> Vec<Individual<A>> {
@@ -539,9 +540,7 @@ where
             self.acquisition_strategy
                 .acquire(population, model, &self.space, rng, fmin, relscale);
 
-        self.outputs
-            .borrow_mut()
-            .event_acquisition_completed(timer.elapsed());
+        output.event_acquisition_completed(timer.elapsed());
 
         offspring
     }

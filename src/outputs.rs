@@ -1,5 +1,6 @@
 extern crate prettytable;
 
+use crate::maybe_owned::MaybeOwned;
 use crate::{Individual, Space, SurrogateModel};
 use failure::ResultExt as _;
 use std::boxed::Box;
@@ -27,41 +28,18 @@ pub trait OutputEventHandler<A> {
     fn event_acquisition_completed(&mut self, _duration: Duration) {}
 }
 
-pub struct NullOutputEventHandler;
-
-impl<A> OutputEventHandler<A> for NullOutputEventHandler {}
-
-pub struct CompositeOutputEventHandler<'life, A> {
-    subloggers: Vec<Box<dyn OutputEventHandler<A> + 'life>>,
-}
-
-impl<'life, A> CompositeOutputEventHandler<'life, A> {
-    pub fn new() -> Self {
-        let subloggers = Vec::new();
-        Self { subloggers }
-    }
-
-    pub fn add(&mut self, logger: Box<dyn OutputEventHandler<A> + 'life>) {
-        self.subloggers.push(logger);
-    }
-}
-
-impl<A> std::default::Default for CompositeOutputEventHandler<'_, A> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<A> OutputEventHandler<A> for CompositeOutputEventHandler<'_, A> {
+impl<A> OutputEventHandler<A> for Output<'_, A> {
     fn event_new_generation(&mut self, gen: usize, relscale: &[f64]) {
         for logger in &mut self.subloggers {
-            logger.event_new_generation(gen, relscale);
+            logger.as_mut().event_new_generation(gen, relscale);
         }
     }
 
     fn event_evaluations_completed(&mut self, individuals: &[Individual<A>], duration: Duration) {
         for logger in &mut self.subloggers {
-            logger.event_evaluations_completed(individuals, duration);
+            logger
+                .as_mut()
+                .event_evaluations_completed(individuals, duration);
         }
     }
 
@@ -72,13 +50,13 @@ impl<A> OutputEventHandler<A> for CompositeOutputEventHandler<'_, A> {
         duration: Duration,
     ) {
         for logger in &mut self.subloggers {
-            logger.event_model_trained(gen, model, duration);
+            logger.as_mut().event_model_trained(gen, model, duration);
         }
     }
 
     fn event_acquisition_completed(&mut self, duration: Duration) {
         for logger in &mut self.subloggers {
-            logger.event_acquisition_completed(duration);
+            logger.as_mut().event_acquisition_completed(duration);
         }
     }
 }
@@ -196,20 +174,40 @@ gen observation prediction ei   cost x    y
     );
 }
 
-pub struct Output<'life, A> {
-    base: CompositeOutputEventHandler<'life, A>,
+#[derive(Default)]
+pub struct DurationCounter {
     evaluation_durations: Vec<Duration>,
     training_durations: Vec<Duration>,
     acquisition_durations: Vec<Duration>,
 }
 
+impl<A> OutputEventHandler<A> for DurationCounter {
+    fn event_evaluations_completed(&mut self, _individuals: &[Individual<A>], duration: Duration) {
+        self.evaluation_durations.push(duration);
+    }
+
+    fn event_model_trained(
+        &mut self,
+        _gen: usize,
+        _model: &dyn SurrogateModel<A>,
+        duration: Duration,
+    ) {
+        self.training_durations.push(duration);
+    }
+
+    fn event_acquisition_completed(&mut self, duration: Duration) {
+        self.acquisition_durations.push(duration)
+    }
+}
+
+pub struct Output<'life, A> {
+    subloggers: Vec<MaybeOwned<'life, dyn OutputEventHandler<A>>>,
+}
+
 impl<A> Default for Output<'_, A> {
     fn default() -> Self {
         Self {
-            base: Default::default(),
-            evaluation_durations: Default::default(),
-            training_durations: Default::default(),
-            acquisition_durations: Default::default(),
+            subloggers: Vec::new(),
         }
     }
 }
@@ -219,45 +217,15 @@ impl<'life, A> Output<'life, A> {
         Default::default()
     }
 
-    pub fn add(&mut self, logger: Box<dyn OutputEventHandler<A> + 'life>) {
-        self.base.add(logger)
+    pub fn add(&mut self, logger: impl OutputEventHandler<A> + 'life) {
+        self.subloggers.push(MaybeOwned::Owned(Box::new(logger)));
     }
 
-    pub fn evaluation_durations(&self) -> &[Duration] {
-        &self.evaluation_durations
+    pub fn add_borrowed(&mut self, logger: &'life mut dyn OutputEventHandler<A>) {
+        self.subloggers.push(MaybeOwned::Borrowed(logger));
     }
 
-    pub fn training_durations(&self) -> &[Duration] {
-        &self.training_durations
-    }
-
-    pub fn acquisition_durations(&self) -> &[Duration] {
-        &self.acquisition_durations
-    }
-}
-
-impl<A> OutputEventHandler<A> for Output<'_, A> {
-    fn event_new_generation(&mut self, gen: usize, relscale: &[f64]) {
-        self.base.event_new_generation(gen, relscale);
-    }
-
-    fn event_evaluations_completed(&mut self, individuals: &[Individual<A>], duration: Duration) {
-        self.evaluation_durations.push(duration);
-        self.base.event_evaluations_completed(individuals, duration);
-    }
-
-    fn event_model_trained(
-        &mut self,
-        generation: usize,
-        model: &dyn SurrogateModel<A>,
-        duration: Duration,
-    ) {
-        self.training_durations.push(duration);
-        self.base.event_model_trained(generation, model, duration);
-    }
-
-    fn event_acquisition_completed(&mut self, duration: Duration) {
-        self.acquisition_durations.push(duration);
-        self.base.event_acquisition_completed(duration);
+    pub fn add_duration_counter(&mut self, counter: &'life mut DurationCounter) {
+        self.add_borrowed(counter);
     }
 }

@@ -29,6 +29,7 @@ mod hierarchical;
 mod individual;
 mod kernel;
 mod knn;
+mod maybe_owned;
 mod minimize;
 mod outputs;
 mod random;
@@ -44,10 +45,7 @@ pub use kernel::Scalar;
 pub use minimize::{
     Minimizer, MinimizerArgs, ObjectiveFunction, ObjectiveFunctionFromFn, OptimizationResult,
 };
-pub use outputs::{
-    CompositeOutputEventHandler, HumanReadableIndividualsOutput, NullOutputEventHandler, Output,
-    OutputEventHandler,
-};
+pub use outputs::{DurationCounter, HumanReadableIndividualsOutput, Output, OutputEventHandler};
 pub use random::RNG;
 pub use space::{Parameter, Space};
 pub use surrogate_model::{Estimator, SurrogateModel};
