@@ -116,7 +116,7 @@ fn main() {
 }
 
 fn command_run(cfg: CliCommandRun) {
-    use ggtune::{EstimatorGPR, HumanReadableIndividualsOutput, MinimizerArgs, ObjectiveFunction};
+    use ggtune::{EstimatorGPR, MinimizerArgs, ObjectiveFunction};
     let CliCommandRun {
         param: params,
         seed,
@@ -134,10 +134,8 @@ fn command_run(cfg: CliCommandRun) {
     let objective: Box<dyn ObjectiveFunction<f64>> = objective.into_objective(&space);
 
     let mut args = MinimizerArgs::<f64, EstimatorGPR>::default();
-    args.output.add(HumanReadableIndividualsOutput::new(
-        std::io::stdout(),
-        &space,
-    ));
+    args.output
+        .add_human_readable_individuals(std::io::stdout(), &space);
 
     let result = minimizer
         .minimize(objective.as_ref(), space, &mut rng, args)

@@ -45,7 +45,7 @@ pub use kernel::Scalar;
 pub use minimize::{
     Minimizer, MinimizerArgs, ObjectiveFunction, ObjectiveFunctionFromFn, OptimizationResult,
 };
-pub use outputs::{DurationCounter, HumanReadableIndividualsOutput, Output, OutputEventHandler};
+pub use outputs::{DurationCounter, Output, OutputEventHandler};
 pub use random::RNG;
 pub use space::{Parameter, Space};
 pub use surrogate_model::{Estimator, SurrogateModel};

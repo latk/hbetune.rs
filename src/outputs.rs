@@ -61,20 +61,9 @@ impl<A> OutputEventHandler<A> for Output<'_, A> {
     }
 }
 
-pub struct HumanReadableIndividualsOutput<'life> {
+struct HumanReadableIndividualsOutput<'life> {
     writer: Box<dyn std::io::Write + 'life>,
     param_names: Vec<String>,
-}
-
-impl<'life> HumanReadableIndividualsOutput<'life> {
-    pub fn new(writer: impl std::io::Write + 'life, space: &Space) -> Self {
-        let writer = Box::new(writer);
-        let param_names = space.params().iter().map(|p| p.name().to_owned()).collect();
-        Self {
-            writer,
-            param_names,
-        }
-    }
 }
 
 impl<A> OutputEventHandler<A> for HumanReadableIndividualsOutput<'_>
@@ -150,13 +139,12 @@ fn test_human_readable_individuals_output() {
     ind.set_observation(15.399).unwrap();
     ind.set_prediction(16.981).unwrap();
 
-    let mut space = Space::new();
-    space.add_real_parameter("x", 0.0, 100.0);
-    space.add_real_parameter("y", 0.0, 100.0);
-
     let mut buffer = Vec::new();
     {
-        let mut output = HumanReadableIndividualsOutput::new(&mut buffer, &space);
+        let mut output = HumanReadableIndividualsOutput {
+            writer: Box::new(&mut buffer),
+            param_names: vec!["x".to_owned(), "y".to_owned()],
+        };
         output.event_evaluations_completed(&[ind], Duration::from_millis(170));
     }
     let actual = String::from_utf8(buffer).expect("wrote correct utf8");
@@ -227,5 +215,20 @@ impl<'life, A> Output<'life, A> {
 
     pub fn add_duration_counter(&mut self, counter: &'life mut DurationCounter) {
         self.add_borrowed(counter);
+    }
+
+    pub fn add_human_readable_individuals(
+        &mut self,
+        writer: impl std::io::Write + 'life,
+        space: &Space,
+    ) where
+        A: std::fmt::Display + Copy,
+    {
+        let writer = Box::new(writer);
+        let param_names = space.params().iter().map(|p| p.name().to_owned()).collect();
+        self.add(HumanReadableIndividualsOutput {
+            writer,
+            param_names,
+        });
     }
 }
