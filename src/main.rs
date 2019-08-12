@@ -63,7 +63,8 @@ struct CliBenchFunction {
     #[structopt(long, default_value = "0.0")]
     noise: f64,
 
-    /// Name of the function. (sphere)
+    /// Name of the function.
+    /// (sphere, goldstein-price, easom, himmelblau, rastrigin, rosenbrock, onemax)
     function: BenchFn,
 }
 
@@ -84,14 +85,26 @@ impl CliObjective {
 #[derive(Debug)]
 enum BenchFn {
     Sphere,
+    GoldsteinPrice,
+    Easom { amplitude: f64 },
+    Himmelblau,
+    Rastrigin { amplitude: f64 },
+    Rosenbrock,
+    Onemax,
 }
 
 impl std::str::FromStr for BenchFn {
     type Err = failure::Error;
 
     fn from_str(name: &str) -> Result<Self, Self::Err> {
-        Ok(match name {
+        Ok(match name.to_ascii_lowercase().as_ref() {
             "sphere" => BenchFn::Sphere,
+            "goldstein-price" => BenchFn::GoldsteinPrice,
+            "easom" => BenchFn::Easom { amplitude: 1.0 },
+            "himmelblau" => BenchFn::Himmelblau,
+            "rastrigin" => BenchFn::Rastrigin { amplitude: 10.0 },
+            "rosenbrock" => BenchFn::Rosenbrock,
+            "onemax" | "sum" => BenchFn::Onemax,
             _ => bail!("expected sphere, got: {:?}", name),
         })
     }
@@ -100,8 +113,23 @@ impl std::str::FromStr for BenchFn {
 impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
     fn run(&self, xs: ndarray::ArrayView1<f64>, rng: &mut ggtune::RNG) -> (f64, f64) {
         use ggtune::benchfn;
+        match self.function {
+            BenchFn::GoldsteinPrice | BenchFn::Easom { .. } | BenchFn::Himmelblau => assert_eq!(
+                xs.len(),
+                2,
+                "objective function requires exactly two dimensions"
+            ),
+            BenchFn::Sphere | BenchFn::Rastrigin { .. } | BenchFn::Rosenbrock | BenchFn::Onemax => {
+            }
+        };
         let y = match self.function {
             BenchFn::Sphere => benchfn::sphere(xs),
+            BenchFn::GoldsteinPrice => benchfn::goldstein_price(xs[0], xs[1]),
+            BenchFn::Easom { amplitude } => benchfn::easom(xs[0], xs[1], amplitude),
+            BenchFn::Himmelblau => benchfn::himmelblau(xs[0], xs[1]),
+            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs, amplitude),
+            BenchFn::Rosenbrock => benchfn::rosenbrock(xs),
+            BenchFn::Onemax => benchfn::onemax(xs),
         };
         (rng.normal(y, self.noise), Default::default())
     }
