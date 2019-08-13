@@ -20,32 +20,18 @@ extern crate structopt;
 extern crate speculate;
 
 #[macro_use]
-mod macros;
 mod util;
+mod core;
 
-mod acquisition;
-mod gpr;
-mod hierarchical;
-mod individual;
-mod kernel;
-mod knn;
-mod maybe_owned;
-mod minimize;
-mod outputs;
-mod random;
-mod space;
-mod surrogate_model;
-
-pub mod benchfn;
-
-pub use acquisition::{AcquisitionStrategy, MutationAcquisition};
-pub use gpr::{EstimatorGPR, SurrogateModelGPR};
-pub use individual::Individual;
-pub use kernel::Scalar;
-pub use minimize::{
+pub use crate::core::acquisition::{AcquisitionStrategy, MutationAcquisition};
+pub use crate::core::benchfn;
+pub use crate::core::gpr::{EstimatorGPR, SurrogateModelGPR};
+pub use crate::core::individual::Individual;
+pub use crate::core::kernel::Scalar;
+pub use crate::core::minimize::{
     Minimizer, MinimizerArgs, ObjectiveFunction, ObjectiveFunctionFromFn, OptimizationResult,
 };
-pub use outputs::{DurationCounter, Output, OutputEventHandler};
-pub use random::RNG;
-pub use space::{Parameter, Space};
-pub use surrogate_model::{Estimator, SurrogateModel};
+pub use crate::core::outputs::{DurationCounter, Output, OutputEventHandler};
+pub use crate::core::random::RNG;
+pub use crate::core::space::{Parameter, Space};
+pub use crate::core::surrogate_model::{Estimator, SurrogateModel};

@@ -47,7 +47,7 @@ use num_traits::Float;
 #[cfg(test)]
 use speculate::speculate;
 
-use crate::kernel::{BoundedValue, BoundsError, ConstantKernel, Kernel, Matern, Product};
+use crate::core::kernel::{BoundedValue, BoundsError, ConstantKernel, Kernel, Matern, Product};
 use crate::util::DisplayIter;
 use crate::{Estimator, Scalar, Space, SurrogateModel, RNG};
 
@@ -254,7 +254,7 @@ speculate! {
                 Matern::new(2.5, vec![BoundedValue::new(1.5, 0.1, 2.0).unwrap()]));
             const SEED: usize = 938274;
             const N_RESTARTS_OPTIMIZER: usize = 4;
-            let mut rng = crate::random::RNG::new_with_seed(SEED);
+            let mut rng = crate::RNG::new_with_seed(SEED);
 
             // precompute stuff
             let KernelFittingResult { alpha, k_inv, .. } = fit_kernel(

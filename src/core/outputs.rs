@@ -1,6 +1,6 @@
 extern crate prettytable;
 
-use crate::maybe_owned::MaybeOwned;
+use crate::core::maybe_owned::MaybeOwned;
 use crate::{Individual, Space, SurrogateModel};
 use failure::ResultExt as _;
 use std::boxed::Box;

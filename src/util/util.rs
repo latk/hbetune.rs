@@ -1,6 +1,6 @@
 extern crate nlopt;
 
-use crate::random::RNG;
+use crate::RNG;
 
 #[cfg(test)]
 use speculate::speculate;
