@@ -36,3 +36,6 @@ opt-level = 2  # otherwise, tests run too slow
 
 [profile.dev]
 opt-level = 2  # otherwise, "cargo run" runs too slow
+
+[profile.release]
+lto = true  # RIP compilation times
