@@ -3,7 +3,6 @@ pub mod benchfn;
 pub mod gpr;
 pub mod hierarchical;
 pub mod individual;
-pub mod kernel;
 pub mod knn;
 pub mod maybe_owned;
 pub mod minimize;
