@@ -26,7 +26,7 @@ enum CliCommand {
 #[derive(Debug, StructOpt)]
 struct CliCommandRun {
     /// Dimensions for the space. Should have form '<name> real <lo> <hi>'.
-    #[structopt(long, raw(min_values = "1", number_of_values = "1"))]
+    #[structopt(long, min_values = 1, number_of_values = 1)]
     param: Vec<ggtune::Parameter>,
 
     /// Random number generator seed for reproducible runs.
@@ -48,7 +48,7 @@ enum CliObjective {
         /// The shell command to invoke for each sample.
         /// Can substitute parameter values by name.
         /// E.g. `./objective "{x1}" --param={x2}`
-        #[structopt(name = "objective-command", raw(min_values = "1"))]
+        #[structopt(name = "objective-command", min_values = 1)]
         objective_command: Vec<String>,
     },
 

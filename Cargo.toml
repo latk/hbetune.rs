@@ -20,7 +20,7 @@ prettytable-rs = "0.8.0"  # for human-readable CLI output
 rayon = "1.1"  # for simple multi-threading
 statrs = "0.11.0"  # for random distributions
 strfmt = "0.1.6"  # for text substitution of command line params
-structopt = "0.2"  # for command-line interface
+structopt = "0.3.2"  # for command-line interface
 
 # the rand crates must share a common rand_core version,
 # which prevents us from always using the lastest
