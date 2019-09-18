@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
-type TimeSource = Fn() -> Instant;
+type TimeSource = dyn Fn() -> Instant;
 
 pub trait ObjectiveFunction<A>: Sync {
     fn run<'a>(&self, xs: ArrayView1<'a, A>, rng: &'a mut RNG) -> (A, A);
@@ -564,7 +564,7 @@ where
 }
 
 #[derive(Clone, Copy)]
-struct FitnessOperator<'life, A>(&'life SurrogateModel<A>, FitnessVia);
+struct FitnessOperator<'life, A>(&'life dyn SurrogateModel<A>, FitnessVia);
 
 impl<'life, A> FitnessOperator<'life, A> {
     fn get_fitness(&self, ind: &Individual<A>) -> Option<A>

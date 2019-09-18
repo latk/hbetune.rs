@@ -184,7 +184,15 @@ where
 {
     assert!(xs.len() >= 2, "at least two dimensions required");
 
-    let (xs, xnexts) = (xs.slice(s![..-1]), xs.slice(s![1..]));
+    fn slice<A, S, Slice>(xs: &ArrayBase<S, Ix1>, s: Slice) -> ArrayView1<A>
+    where
+        S: Data<Elem = A>,
+        Slice: Into<ndarray::SliceOrIndex>,
+    {
+        xs.slice(&ndarray::SliceInfo::<_, Ix1>::new([s.into()]).unwrap())
+    }
+
+    let (xs, xnexts) = (slice(&xs, ..-1), slice(&xs, 1..));
     ((xnexts.to_owned() - xs.mapv(|x| x.powi(2)).mapv(|x| x.powi(2))).mapv(|x| 100.into() * x)
         + xs.mapv(|x| (1.into() - x).powi(2)))
     .sum()
