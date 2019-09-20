@@ -135,11 +135,8 @@ where
 #[test]
 fn test_human_readable_individuals_output() {
     let mut ind = Individual::new(vec![0.123.into(), 12.2.into()]);
-    ind.set_gen(3).unwrap();
-    ind.set_cost(0.759).unwrap();
-    ind.set_expected_improvement(0.178).unwrap();
-    ind.set_observation(15.399).unwrap();
-    ind.set_prediction(16.981).unwrap();
+    ind.set_evaluation_result(3, 15.399, 0.759).unwrap();
+    ind.set_prediction_and_ei(16.981, 0.178).unwrap();
 
     let mut buffer = Vec::new();
     {

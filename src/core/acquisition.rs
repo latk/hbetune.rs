@@ -1,6 +1,5 @@
 use crate::{Individual, Scalar, Space, SurrogateModel, RNG};
 use itertools::Itertools as _;
-use ndarray::prelude::*;
 
 pub trait AcquisitionStrategy<A> {
     /// Acquire new individuals. Should return `population.len()` new individuals.
@@ -77,10 +76,9 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
 
                 let sample = take_vec_item(candidate_samples, i);
                 let mut offspring = Individual::new(sample);
-                offspring.set_prediction(candidate_mean[i]).unwrap();
                 offspring
-                    .set_expected_improvement(A::from_f(candidate_ei[i]))
-                    .unwrap();
+                    .set_prediction_and_ei(candidate_mean[i], A::from_f(candidate_ei[i]))
+                    .expect("individual cannot have previous prediction");
                 offspring
             })
             .collect()

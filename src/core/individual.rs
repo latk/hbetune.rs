@@ -1,6 +1,5 @@
 use crate::ParameterValue;
 use itertools::Itertools as _;
-use ndarray::prelude::*;
 
 type Generation = i64;
 
@@ -53,19 +52,9 @@ where
         self.gen
     }
 
-    /// Write the generation in which the Individual was evaluated.
-    pub fn set_gen(&mut self, gen: Generation) -> Result<(), Generation> {
-        fail_if_some(self.gen.replace(gen))
-    }
-
     /// The predicted value (write once).
     pub fn prediction(&self) -> Option<A> {
         self.prediction
-    }
-
-    /// Write the predicted value.
-    pub fn set_prediction(&mut self, prediction: A) -> Result<(), A> {
-        fail_if_some(self.prediction.replace(prediction))
     }
 
     /// The expected improvement before the Individual was evaluated. Write-once.
@@ -73,8 +62,9 @@ where
         self.expected_improvement
     }
 
-    /// Write the expected improvement.
-    pub fn set_expected_improvement(&mut self, ei: A) -> Result<(), A> {
+    /// Write the predicted value and the expected improvement.
+    pub fn set_prediction_and_ei(&mut self, prediction: A, ei: A) -> Result<(), ()> {
+        fail_if_some(self.prediction.replace(prediction))?;
         fail_if_some(self.expected_improvement.replace(ei))
     }
 
@@ -83,25 +73,27 @@ where
         self.observation
     }
 
-    /// Write the observed value.
-    pub fn set_observation(&mut self, observation: A) -> Result<(), A> {
-        fail_if_some(self.observation.replace(observation))
-    }
-
     /// The observed cost (write once).
     pub fn cost(&self) -> Option<A> {
         self.cost
     }
 
-    /// Write the observed cost.
-    pub fn set_cost(&mut self, cost: A) -> Result<(), A> {
+    /// Write the evaluation result: generation, observation, and cost.
+    pub fn set_evaluation_result(
+        &mut self,
+        gen: Generation,
+        observation: A,
+        cost: A,
+    ) -> Result<(), ()> {
+        fail_if_some(self.gen.replace(gen))?;
+        fail_if_some(self.observation.replace(observation))?;
         fail_if_some(self.cost.replace(cost))
     }
 }
 
-fn fail_if_some<T>(maybe: Option<T>) -> Result<(), T> {
+fn fail_if_some<T>(maybe: Option<T>) -> Result<(), ()> {
     match maybe {
-        Some(x) => Err(x),
+        Some(_) => Err(()),
         None => Ok(()),
     }
 }
@@ -116,11 +108,15 @@ fn fail_if_some<T>(maybe: Option<T>) -> Result<(), T> {
 /// let mut ind: Individual<f64> = Individual::new(
 ///     vec![1.0.into(), 2.0.into(), 3.0.into()],
 /// );
-/// ind.set_observation(17.2);
-/// ind.set_expected_improvement(0.3);
 /// assert_eq!(
 ///     format!("{:?}", ind),
-///     "Individual(17.2 @None [Real(1.0) Real(2.0) Real(3.0)] prediction: None ei: 0.3 gen: None)",
+///     "Individual(None @None [Real(1.0) Real(2.0) Real(3.0)] prediction: None ei: None gen: None)",
+/// );
+/// ind.set_prediction_and_ei(1.2, 0.3);
+/// ind.set_evaluation_result(3, 17.2, 0.2);
+/// assert_eq!(
+///     format!("{:?}", ind),
+///     "Individual(17.2 @0.20 [Real(1.0) Real(2.0) Real(3.0)] prediction: 1.2 ei: 0.3 gen: 3)",
 /// );
 /// ```
 impl<A> std::fmt::Debug for Individual<A>

@@ -314,8 +314,8 @@ where
         all_evalutions.extend(historic_individuals);
 
         for ind in &mut population {
-            ind.set_prediction(A::from_f(0.0)).unwrap();
-            ind.set_expected_improvement(A::from_f(0.0)).unwrap();
+            ind.set_prediction_and_ei(A::from_f(0.0), A::from_f(0.0))
+                .expect("individual cannot have previous prediction");
         }
 
         self.evaluate_all(population.as_mut_slice(), rng, output, 0);
@@ -427,11 +427,8 @@ where
             .zip(rngs)
             .for_each(|(ind, mut rng): (&mut Individual<A>, _)| {
                 let (observation, cost) = objective.run(ind.sample(), &mut rng);
-                ind.set_observation(observation)
-                    .expect("observation was unset");
-                ind.set_cost(cost).expect("cost was unset");
-                ind.set_gen(generation.into())
-                    .expect("generation was unset");
+                ind.set_evaluation_result(generation.into(), observation, cost)
+                    .expect("individual cannot be evaluated twice");
                 assert!(ind.is_fully_initialized());
             });
 
