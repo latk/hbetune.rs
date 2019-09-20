@@ -1,6 +1,6 @@
 use crate::{AcquisitionStrategy, MutationAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
-use crate::{Individual, Output, OutputEventHandler as _, Scalar, Space, RNG};
+use crate::{Individual, Output, OutputEventHandler as _, ParameterValue, Scalar, Space, RNG};
 
 use std::iter::FromIterator as _;
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use ndarray::prelude::*;
 type TimeSource = dyn Fn() -> Instant;
 
 pub trait ObjectiveFunction<A>: Sync {
-    fn run<'a>(&self, xs: ArrayView1<'a, A>, rng: &'a mut RNG) -> (A, A);
+    fn run<'a>(&self, xs: &[ParameterValue], rng: &'a mut RNG) -> (A, A);
 }
 
 pub struct ObjectiveFunctionFromFn<F>(F);
@@ -24,10 +24,10 @@ impl<F> ObjectiveFunctionFromFn<F> {
 
 impl<A, F> ObjectiveFunction<A> for ObjectiveFunctionFromFn<F>
 where
-    F: Fn(ArrayView1<A>) -> A + Sync,
+    F: Fn(&[ParameterValue]) -> A + Sync,
     A: Default,
 {
-    fn run<'a>(&self, xs: ArrayView1<'a, A>, _rng: &'a mut RNG) -> (A, A) {
+    fn run<'a>(&self, xs: &[ParameterValue], _rng: &'a mut RNG) -> (A, A) {
         let Self(f) = self;
         (f(xs), Default::default())
     }
@@ -82,19 +82,6 @@ impl<A, Model> OptimizationResult<A, Model> {
     /// Final model.
     pub fn model(&self) -> Option<&Model> {
         self.all_models.last()
-    }
-
-    /// Input variables of all evaluations
-    pub fn xs(&self) -> Array2<A>
-    where
-        A: Copy,
-    {
-        let samples = self
-            .all_individuals
-            .iter()
-            .map(|ind| ind.sample().insert_axis(Axis(0)))
-            .collect_vec();
-        ndarray::stack(Axis(0), &samples).unwrap()
     }
 
     /// Output variables of all evaluations.
@@ -338,7 +325,7 @@ where
         all_models.push(self.fit_next_model(all_evalutions.as_slice(), 0, None, rng, output)?);
 
         let find_fmin = |individuals: &[Individual<A>], model: &Estimator::Model| {
-            let fmin_operator = FitnessOperator(model, config.fmin_via);
+            let fmin_operator = FitnessOperator(model, &self.space, config.fmin_via);
             individuals
                 .iter()
                 .min_by(|a, b| {
@@ -413,7 +400,7 @@ where
     }
 
     fn make_initial_population(&self, rng: &mut RNG) -> Vec<Individual<A>> {
-        std::iter::from_fn(|| Some(self.space.sample(rng)))
+        std::iter::repeat_with(|| self.space.sample_individual(rng))
             .take(self.config.initial)
             .collect_vec()
     }
@@ -463,24 +450,20 @@ where
 
         use ndarray::prelude::*;
 
-        let xs: Array2<A> = ndarray::stack(
-            Axis(0),
+        let xs = self.space.project_into_features_array(
             individuals
                 .iter()
-                .map(|ind| ind.sample().insert_axis(Axis(0)))
+                .map(|ind| ind.sample())
                 .collect_vec()
                 .as_slice(),
-        )
-        .unwrap();
+        );
 
         let ys: Array1<A> = individuals
             .iter()
             .map(|ind| ind.observation().expect("individual has observation"))
             .collect();
 
-        let model = self
-            .estimator
-            .estimate(xs, ys, self.space.clone(), prev_model, rng)?;
+        let model = self.estimator.estimate(xs, ys, prev_model, rng)?;
 
         output.event_model_trained(gen, &model, timer.elapsed());
 
@@ -495,7 +478,7 @@ where
         rng: &mut RNG,
     ) -> Vec<Individual<A>> {
         // Sort the individuals.
-        let fitness_operator = FitnessOperator(model, self.config.select_via);
+        let fitness_operator = FitnessOperator(model, &self.space, self.config.select_via);
         population.sort_by(|a, b| {
             fitness_operator
                 .compare(a, b)
@@ -551,7 +534,7 @@ where
         offspring: Vec<Individual<A>>,
         model: &Estimator::Model,
     ) -> Vec<Individual<A>> {
-        let fitness_operator = FitnessOperator(model, self.config.select_via);
+        let fitness_operator = FitnessOperator(model, &self.space, self.config.select_via);
 
         let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 
@@ -564,16 +547,18 @@ where
 }
 
 #[derive(Clone, Copy)]
-struct FitnessOperator<'life, A>(&'life dyn SurrogateModel<A>, FitnessVia);
+struct FitnessOperator<'life, A>(&'life dyn SurrogateModel<A>, &'life Space, FitnessVia);
 
 impl<'life, A> FitnessOperator<'life, A> {
     fn get_fitness(&self, ind: &Individual<A>) -> Option<A>
     where
         A: Scalar,
     {
-        let &FitnessOperator(ref model, fitness_via) = self;
+        let &FitnessOperator(ref model, ref space, fitness_via) = self;
         match fitness_via {
-            FitnessVia::Prediction => Some(model.predict_mean(ind.sample().to_owned())),
+            FitnessVia::Prediction => Some(model.predict_mean_transformed(
+                space.project_into_features(ind.sample()).to_vec().into(),
+            )),
             FitnessVia::Observation => ind.observation(),
         }
     }

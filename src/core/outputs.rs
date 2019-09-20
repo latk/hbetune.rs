@@ -1,7 +1,7 @@
 extern crate prettytable;
 
 use crate::core::maybe_owned::MaybeOwned;
-use crate::{Individual, Space, SurrogateModel};
+use crate::{Individual, ParameterValue, Space, SurrogateModel};
 use failure::ResultExt as _;
 use std::boxed::Box;
 use std::time::Duration;
@@ -115,7 +115,9 @@ where
             row.add_cell(cell_right(prec2(ind.expected_improvement())));
             row.add_cell(cell_right(prec2(ind.cost())));
             for x in ind.sample() {
-                row.add_cell(cell_right(format!("{:.02}", x)));
+                row.add_cell(cell_right(match x {
+                    ParameterValue::Real(x) => format!("{:.02}", x),
+                }));
             }
         }
 
@@ -132,7 +134,7 @@ where
 
 #[test]
 fn test_human_readable_individuals_output() {
-    let mut ind = Individual::new(vec![0.123, 12.2]);
+    let mut ind = Individual::new(vec![0.123.into(), 12.2.into()]);
     ind.set_gen(3).unwrap();
     ind.set_cost(0.759).unwrap();
     ind.set_expected_improvement(0.178).unwrap();

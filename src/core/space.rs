@@ -1,10 +1,11 @@
+use itertools::Itertools as _;
 use ndarray::prelude::*;
 
 use crate::{Individual, Scalar, RNG};
 
-/// The parameter space that contains feasible solutions.
-/// This space is usually handled in its natural units,
-/// but internally each parameter can be projected into the range 0 to 1 inclusive.
+/// The parameter design space that contains feasible solutions.
+/// This space is usually handled in its natural units.
+/// Internally, samples are projected into a design space of reals in the range 0 to 1 inclusive.
 #[derive(Debug, Clone, Default)]
 pub struct Space {
     params: Vec<Parameter>,
@@ -47,15 +48,7 @@ impl Space {
         self.params.push(param);
     }
 
-    /// Project a parameter array in-place into the range 0 to 1 inclusive.
-    pub fn transform_sample_inplace<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
-        assert!(x.len() == self.len());
-        for (x, param) in x.iter_mut().zip(&self.params) {
-            param.transform_sample_inplace(x);
-        }
-    }
-
-    /// Project a parameter array into the range 0 to 1 inclusive.
+    /// Project a parameter values into the feature space.
     ///
     /// ```
     /// #[macro_use] extern crate ndarray;
@@ -64,78 +57,92 @@ impl Space {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
-    /// assert_eq!(space.transform_sample(array![-1.0, 7.0]),
-    ///            array![0.25, 0.7]);
+    /// let params = [(-1.0).into(), 7.0.into()];
+    /// let features: Vec<f64> = space.project_into_features(params);
+    /// assert_eq!(features, &[0.25, 0.7]);
     /// # }
     /// ```
-    pub fn transform_sample<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
-        self.transform_sample_inplace(x.view_mut());
-        x
+    pub fn project_into_features<A: Scalar>(&self, x: impl AsRef<[ParameterValue]>) -> Vec<A> {
+        let x = x.as_ref();
+        assert!(
+            x.len() == self.params.len(),
+            "the space has {} parameters but got {} values",
+            self.params.len(),
+            x.len(),
+        );
+        x.iter()
+            .zip_eq(&self.params)
+            .map(|(x, param)| param.project_into_features(*x))
+            .collect()
     }
 
-    /// Project a matrix of parameter vectors into the range 0 to 1 inclusive.
-    pub fn transform_sample_a<A: Scalar>(&self, mut xs: Array2<A>) -> Array2<A> {
-        for x in xs.outer_iter_mut() {
-            self.transform_sample_inplace(x);
-        }
-        xs
+    pub fn project_into_features_array<A: Scalar, Sample: AsRef<[ParameterValue]>>(
+        &self,
+        xs: impl IntoIterator<Item = Sample>,
+    ) -> Array2<A> {
+        let features = xs
+            .into_iter()
+            .map(|x| self.project_into_features(x.as_ref()))
+            .map(|x| Array1::from(x))
+            .collect_vec();
+        ndarray::stack(
+            Axis(0),
+            features
+                .iter()
+                .map(|x| x.view().insert_axis(Axis(0)))
+                .collect_vec()
+                .as_slice(),
+        )
+        .unwrap()
     }
 
-    /// Get a parameter vector from a projection in the range 0 to 1 inclusive.
-    pub fn untransform_sample_inplace<A: Scalar>(&self, mut x: ArrayViewMut1<A>) {
-        assert!(x.len() == self.len());
-        for (x, param) in x.iter_mut().zip(&self.params) {
-            param.untransform_sample_inplace(x)
-        }
-    }
-
-    /// Get a parameter vector from a projection in the range 0 to 1 inclusive.
+    /// Get a parameter vector back from the feature space.
     ///
     /// ```
     /// #[macro_use] extern crate ndarray;
-    /// # use ggtune::Space;
+    /// # use ggtune::{Space, ParameterValue};
     /// # fn main() {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
-    /// let params = array![-1.0, 7.0];
-    /// assert_eq!(space.untransform_sample(space.transform_sample(params.clone())),
-    ///            params);
+    /// let params = [(-1.0).into(), 7.0.into()];
+    /// let features: Vec<f64> = space.project_into_features(params.as_ref());
+    /// assert_eq!(
+    ///     space.project_from_features(features).as_slice(),
+    ///     params.as_ref(),
+    /// );
     /// # }
     /// ```
-    pub fn untransform_sample<A: Scalar>(&self, mut x: Array1<A>) -> Array1<A> {
-        self.untransform_sample_inplace(x.view_mut());
-        x
+    pub fn project_from_features<A: Scalar>(&self, x: impl AsRef<[A]>) -> Vec<ParameterValue> {
+        x.as_ref()
+            .iter()
+            .zip_eq(&self.params)
+            .map(|(x, param)| param.project_from_features(*x))
+            .collect()
     }
 
     /// Sample a new Individual uniformly from the projected parameter space.
-    pub fn sample<A>(&self, rng: &mut RNG) -> Individual<A>
+    pub fn sample_individual<A>(&self, rng: &mut RNG) -> Individual<A>
     where
         A: Scalar + rand::distributions::uniform::SampleUniform,
     {
-        let range = num_traits::zero()..=num_traits::one();
-        let sample = Array::from_shape_fn(self.len(), |_| rng.uniform(range.clone()));
-        Individual::new(self.untransform_sample(sample))
+        Individual::new(self.sample(rng))
     }
 
-    pub fn mutate_transformed<A: Scalar>(
-        &self,
-        mut sample_transformed: Array1<A>,
-        relscale: &[f64],
-        rng: &mut RNG,
-    ) -> Array1<A> {
-        assert_eq!(sample_transformed.len(), relscale.len());
-        assert_eq!(sample_transformed.len(), self.len());
+    pub fn sample(&self, rng: &mut RNG) -> Vec<ParameterValue> {
+        let sample = std::iter::repeat_with(|| rng.uniform(0.0..=1.0))
+            .take(self.len())
+            .collect_vec();
+        self.project_from_features(&sample)
+    }
 
-        for (i, x) in sample_transformed.indexed_iter_mut() {
-            *x = match self.params[i] {
-                Parameter::Real { .. } => {
-                    A::from_f(sample_truncnorm((*x).into(), relscale[i], 0.0, 1.0, rng))
-                }
-            }
+    pub fn mutate_inplace(&self, sample: &mut [ParameterValue], relscale: &[f64], rng: &mut RNG) {
+        assert_eq!(sample.len(), relscale.len());
+        assert_eq!(sample.len(), self.len());
+
+        for (i, x) in sample.iter_mut().enumerate() {
+            self.params[i].mutate_inplace(x, relscale[i], rng);
         }
-
-        sample_transformed
     }
 }
 
@@ -151,6 +158,33 @@ fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
     normal.inverse_cdf(xz) * sigma + mu
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ParameterValue {
+    Real(f64),
+}
+
+impl From<f64> for ParameterValue {
+    fn from(x: f64) -> ParameterValue {
+        ParameterValue::Real(x)
+    }
+}
+
+impl Into<f64> for ParameterValue {
+    fn into(self) -> f64 {
+        match self {
+            ParameterValue::Real(x) => x,
+        }
+    }
+}
+
+impl std::fmt::Display for ParameterValue {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            ParameterValue::Real(x) => write!(fmt, "{}", x),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Parameter {
     Real { name: String, lo: f64, hi: f64 },
@@ -163,16 +197,26 @@ impl Parameter {
         }
     }
 
-    fn transform_sample_inplace<A: Scalar>(&self, x: &mut A) {
-        *x = match *self {
-            Parameter::Real { lo, hi, .. } => (*x - A::from_f(lo)) / A::from_f(hi - lo),
-        };
+    fn project_into_features<A: Scalar>(&self, x: ParameterValue) -> A {
+        match *self {
+            Parameter::Real { lo, hi, .. } => match x {
+                ParameterValue::Real(x) => A::from_f((x - lo) / (hi - lo)),
+            },
+        }
     }
 
-    fn untransform_sample_inplace<A: Scalar>(&self, x: &mut A) {
-        *x = match *self {
-            Parameter::Real { lo, hi, .. } => *x * A::from_f(hi - lo) + A::from_f(lo),
-        };
+    fn project_from_features<A: Scalar>(&self, x: A) -> ParameterValue {
+        match *self {
+            Parameter::Real { lo, hi, .. } => ParameterValue::Real(x.into() * (hi - lo) + lo),
+        }
+    }
+
+    fn mutate_inplace(&self, x: &mut ParameterValue, relscale: f64, rng: &mut RNG) {
+        match *self {
+            Parameter::Real { lo, hi, .. } => match *x {
+                ParameterValue::Real(ref mut x) => *x = sample_truncnorm(*x, relscale, lo, hi, rng),
+            },
+        }
     }
 }
 

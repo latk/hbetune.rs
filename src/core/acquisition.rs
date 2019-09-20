@@ -42,17 +42,23 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
         population
             .iter()
             .map(|parent| {
-                let parent_sample_transformed = space.transform_sample(parent.sample().to_owned());
+                let parent_sample = parent.sample();
 
-                let candidate_samples: Vec<Array1<A>> = std::iter::from_fn(|| {
-                    Some(space.mutate_transformed(parent_sample_transformed.clone(), relscale, rng))
+                let candidate_samples = std::iter::repeat_with(|| {
+                    let mut sample = parent_sample.to_vec();
+                    space.mutate_inplace(&mut sample, relscale, rng);
+                    sample
                 })
                 .take(self.breadth)
-                .collect();
+                .collect_vec();
 
                 let (candidate_mean, candidate_std): (Vec<A>, Vec<A>) = candidate_samples
                     .iter()
-                    .map(|candidate| model.predict_mean_std_transformed(candidate.to_owned()))
+                    .map(|candidate| {
+                        model.predict_mean_std_transformed(
+                            space.project_into_features(candidate).into(),
+                        )
+                    })
                     .unzip();
 
                 let candidate_ei: Vec<f64> = candidate_mean
@@ -69,7 +75,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                     })
                     .expect("there should be a candidate with maximal EI");
 
-                let sample = space.untransform_sample(take_vec_item(candidate_samples, i));
+                let sample = take_vec_item(candidate_samples, i);
                 let mut offspring = Individual::new(sample);
                 offspring.set_prediction(candidate_mean[i]).unwrap();
                 offspring

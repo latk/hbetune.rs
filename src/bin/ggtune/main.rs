@@ -7,6 +7,7 @@ extern crate ndarray;
 #[macro_use]
 extern crate failure;
 
+use itertools::Itertools as _;
 use structopt::StructOpt as _;
 
 mod objective_shell;
@@ -111,8 +112,9 @@ impl std::str::FromStr for BenchFn {
 }
 
 impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
-    fn run(&self, xs: ndarray::ArrayView1<f64>, rng: &mut ggtune::RNG) -> (f64, f64) {
+    fn run(&self, xs: &[ggtune::ParameterValue], rng: &mut ggtune::RNG) -> (f64, f64) {
         use ggtune::benchfn;
+        let xs = xs.iter().map(|&x| x.into()).collect_vec();
         match self.function {
             BenchFn::GoldsteinPrice | BenchFn::Easom { .. } | BenchFn::Himmelblau => assert_eq!(
                 xs.len(),
@@ -123,13 +125,13 @@ impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
             }
         };
         let y = match self.function {
-            BenchFn::Sphere => benchfn::sphere(xs),
+            BenchFn::Sphere => benchfn::sphere(xs.into()),
             BenchFn::GoldsteinPrice => benchfn::goldstein_price(xs[0], xs[1]),
             BenchFn::Easom { amplitude } => benchfn::easom(xs[0], xs[1], amplitude),
             BenchFn::Himmelblau => benchfn::himmelblau(xs[0], xs[1]),
-            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs, amplitude),
-            BenchFn::Rosenbrock => benchfn::rosenbrock(xs),
-            BenchFn::Onemax => benchfn::onemax(xs),
+            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs.into(), amplitude),
+            BenchFn::Rosenbrock => benchfn::rosenbrock(xs.into()),
+            BenchFn::Onemax => benchfn::onemax(xs.into()),
         };
         (rng.normal(y, self.noise), Default::default())
     }

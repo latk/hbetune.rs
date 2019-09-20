@@ -63,7 +63,6 @@ pub struct SurrogateModelGPR<A: Scalar> {
     k_inv: Array2<A>,
     y_norm: YNormalization<A>,
     lml: f64,
-    space: Space,
 }
 
 impl<A: Scalar> SurrogateModelGPR<A> {
@@ -73,10 +72,6 @@ impl<A: Scalar> SurrogateModelGPR<A> {
 }
 
 impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
-    fn space(&self) -> &Space {
-        &self.space
-    }
-
     fn length_scales(&self) -> Vec<f64> {
         self.kernel
             .k2()
@@ -140,7 +135,6 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         &self,
         x: Array2<A>,
         y: Array1<A>,
-        space: Space,
         prior: Option<&Self::Model>,
         rng: &mut RNG,
     ) -> Result<Self::Model, Self::Error> {
@@ -151,17 +145,11 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
             n_observations,
             y,
         );
-        assert!(
-            space.len() == n_features,
-            "number of parameters ({}) must equal number of features ({})",
-            space.len(),
-            n_features,
-        );
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
         let (y_train, y_norm) = YNormalization::normalized_from_y(y);
-        let x_train = space.transform_sample_a(x);
+        let x_train = x;
 
         let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
 
@@ -191,7 +179,6 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
             k_inv,
             y_norm,
             lml,
-            space,
         })
     }
 }

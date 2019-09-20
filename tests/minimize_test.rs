@@ -8,11 +8,17 @@ use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
+fn sphere_objective<A: ggtune::Scalar>(xs: &[ggtune::ParameterValue]) -> A {
+    let xs_array = xs.iter().cloned().map(Into::into).collect_vec().into();
+    let y: f64 = ggtune::benchfn::sphere(xs_array);
+    A::from_f(y)
+}
+
 #[test]
 fn sphere_d2_f64() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
+        ObjectiveFunctionFromFn::new(sphere_objective),
         904827189,
         &[array![0.0, 0.0]],
         0.2,
@@ -28,8 +34,8 @@ fn sphere_d2_f64() {
 fn sphere_d2_f32() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
-        37895438,
+        ObjectiveFunctionFromFn::new(sphere_objective),
+        1759340364,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -44,8 +50,8 @@ fn sphere_d2_f32() {
 fn sphere_d2_edge() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
-        ObjectiveFunctionFromFn::new(|xs: ArrayView1<_>| ggtune::benchfn::sphere(xs)),
-        8345729,
+        ObjectiveFunctionFromFn::new(sphere_objective),
+        1098438,
         &[array![0.1, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -72,7 +78,7 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
     _types: Types<A, Model>,
     objective: ObjectiveFn,
     rng_seed: usize,
-    ideal: &[Array1<A>],
+    ideal: &[Array1<f64>],
     max_distance: f64,
     setup: SetupFn,
 ) where
@@ -94,12 +100,13 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
         .minimize(&objective, space, &mut rng, args)
         .expect("minimization should proceed successfully");
 
-    let guess: Array1<A> = result
+    let guess: Array1<f64> = result
         .best_individual()
         .expect("there should be a best individual")
         .sample()
         .iter()
         .cloned()
+        .map(Into::into)
         .collect();
 
     let distance: f64 = ideal

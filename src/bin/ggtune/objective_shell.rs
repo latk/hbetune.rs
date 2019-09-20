@@ -24,15 +24,18 @@ impl<A> ggtune::ObjectiveFunction<A> for RunCommandAsObjective
 where
     A: Copy + FromStr + std::fmt::Display,
 {
-    fn run<'a>(&self, xs: ndarray::ArrayView1<'a, A>, _rng: &'a mut ggtune::RNG) -> (A, A) {
+    fn run<'a>(&self, xs: &[ggtune::ParameterValue], _rng: &'a mut ggtune::RNG) -> (A, A) {
         let template = self.cli_template.iter().map(String::as_ref).collect_vec();
-        let xs = xs.to_vec();
 
-        run_command_as_objective(&self.space, template.as_slice(), xs.as_slice())
+        run_command_as_objective(&self.space, template.as_slice(), xs)
     }
 }
 
-fn run_command_as_objective<A>(space: &Space, template: &[&str], xs: &[A]) -> (A, A)
+fn run_command_as_objective<A>(
+    space: &Space,
+    template: &[&str],
+    xs: &[ggtune::ParameterValue],
+) -> (A, A)
 where
     A: Copy + FromStr + std::fmt::Display,
 {

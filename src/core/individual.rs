@@ -1,3 +1,4 @@
+use crate::ParameterValue;
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
@@ -7,7 +8,7 @@ type Generation = i64;
 /// Many fields are write-once (checked dynamically).
 #[derive(Clone)]
 pub struct Individual<A> {
-    sample: Array1<A>,
+    sample: Vec<ParameterValue>,
     gen: Option<Generation>,
     prediction: Option<A>,
     expected_improvement: Option<A>,
@@ -20,9 +21,9 @@ where
     A: Copy,
 {
     /// Create a new individual at a certain sample.
-    pub fn new(sample: impl Into<Array1<A>>) -> Self {
+    pub fn new(sample: Vec<ParameterValue>) -> Self {
         Individual {
-            sample: sample.into(),
+            sample: sample,
             gen: None,
             prediction: None,
             expected_improvement: None,
@@ -43,8 +44,8 @@ where
 
     /// The input variables at which the experiment was evaluated
     /// or shall be evaluated.
-    pub fn sample(&self) -> ArrayView1<A> {
-        self.sample.view()
+    pub fn sample(&self) -> &[ParameterValue] {
+        self.sample.as_slice()
     }
 
     /// The generation in which the Individual was evaluated. Write-once.
@@ -112,11 +113,15 @@ fn fail_if_some<T>(maybe: Option<T>) -> Result<(), T> {
 /// # extern crate ggtune;
 /// # use ndarray::prelude::*;
 /// # use ggtune::Individual;
-/// let mut ind: Individual<f64> = Individual::new(array![1.0, 2.0, 3.0]);
+/// let mut ind: Individual<f64> = Individual::new(
+///     vec![1.0.into(), 2.0.into(), 3.0.into()],
+/// );
 /// ind.set_observation(17.2);
 /// ind.set_expected_improvement(0.3);
-/// assert_eq!(format!("{:?}", ind),
-///            "Individual(17.2 @None [1.0 2.0 3.0] prediction: None ei: 0.3 gen: None)");
+/// assert_eq!(
+///     format!("{:?}", ind),
+///     "Individual(17.2 @None [Real(1.0) Real(2.0) Real(3.0)] prediction: None ei: 0.3 gen: None)",
+/// );
 /// ```
 impl<A> std::fmt::Debug for Individual<A>
 where

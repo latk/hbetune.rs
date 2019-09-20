@@ -12,6 +12,7 @@ use ndarray::prelude::*;
 use speculate::speculate;
 
 struct SimpleModel {
+    space: Space,
     model: SurrogateModelGPR<f64>,
 }
 
@@ -25,11 +26,13 @@ impl std::fmt::Debug for SimpleModel {
 
 impl SimpleModel {
     fn predict(&self, x: f64) -> f64 {
-        self.model.predict_mean(array![x])
+        let x = self.space.project_into_features(&[x.into()]);
+        self.model.predict_mean_transformed(x.into())
     }
 
     fn uncertainty(&self, x: f64) -> f64 {
-        self.model.predict_mean_std(array![x]).1
+        let x = self.space.project_into_features(&[x.into()]);
+        self.model.predict_mean_std_transformed(x.into()).1
     }
 }
 
@@ -85,11 +88,11 @@ speculate! {
                 let ys = array![1.0, 1.8, 2.2, 3.0];
                 let space = make_space();
                 let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space).estimate(
-                    xs, ys, space,
+                    xs, ys,
                     None,
                     &mut RNG::new_with_seed(123),
                 ).unwrap();
-                SimpleModel { model }
+                SimpleModel { space, model }
             }
 
             it "should roughly fit the data" {
@@ -135,12 +138,12 @@ speculate! {
                     .noise_bounds(1e-5, 1e0)
                     .length_scale_bounds(vec![(0.1, 1.0)])
                     .estimate(
-                        xs, ys, space,
+                        xs, ys,
                         None,
                         &mut RNG::new_with_seed(9372),
                     ).unwrap();
                 eprintln!("estimated mode: {:#?}", model);
-                SimpleModel { model }
+                SimpleModel { space, model }
             }
 
             it "has low uncertainty at samples" {
@@ -177,14 +180,14 @@ speculate! {
                 .noise_bounds(1e-2, 1e1)
                 .estimate(
                     xs.clone(), ys,
-                    space, None, &mut RNG::new_with_seed(4531),
+                    None, &mut RNG::new_with_seed(4531),
                 ).unwrap();
             eprintln!("trained model: {:#?}", model);
 
-            let check_predictions = |xs: &Array2<_>| {
+            let check_predictions = |xs: &Array2<f64>| {
                 let expected_ys: Array1<_> = xs.outer_iter().map(sphere).collect();
 
-                let (predicted_ys, predicted_std) = model.predict_mean_std_a(xs.to_owned());
+                let (predicted_ys, predicted_std) = model.predict_mean_std_transformed_a(xs.clone());
 
                 let is_ok = izip!(expected_ys.outer_iter(),
                                   predicted_ys.outer_iter(),
@@ -287,13 +290,13 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
 
     let mut rng = RNG::new_with_seed(rng_seed);
 
-    let xs = generate_training_set(training_set, &mut rng);
+    let xs_features = generate_training_set(training_set, &mut rng);
 
-    let ys = xs
+    let ys = xs_features
         .map_axis(Axis(1), |ax| sphere(ax))
         .mapv_into(|y| rng.normal(y, noise_level));
 
-    let model = train_model(xs.clone(), ys, &mut rng);
+    let model = train_model(xs_features.clone(), ys, &mut rng);
 
     fn generate_training_set(training_set: &str, rng: &mut RNG) -> Array2<f64> {
         match training_set {
@@ -322,7 +325,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
             .length_scale_bounds(vec![(1e-2, 2e1); 2])
             .noise_bounds(1e-2, 1e1)
             .n_restarts_optimizer(1)
-            .estimate(xs.clone(), ys, space, None, rng)
+            .estimate(xs.clone(), ys, None, rng)
             .expect("model should train successfully");
 
         model
@@ -346,8 +349,8 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     .flatten()
     .sum();
 
-    let xs_test = match testmode {
-        "selftest" => xs.clone(),
+    let xs_test_features = match testmode {
+        "selftest" => xs_features.clone(),
         "newsample" => Array::from_shape_fn((25, 2), |(i, _)| {
             if i < 15 {
                 rng.uniform(-2.0..=2.0)
@@ -358,8 +361,9 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         _ => unimplemented!("{}", testmode),
     };
 
-    let expected_ys = xs_test.map_axis(Axis(1), |ax| sphere(ax));
-    let (predicted_ys, predicted_std) = model.predict_mean_std_a(xs_test.clone());
+    let expected_ys = xs_test_features.map_axis(Axis(1), |ax| sphere(ax));
+    let (predicted_ys, predicted_std) =
+        model.predict_mean_std_transformed_a(xs_test_features.clone());
 
     let error = (&predicted_ys - &expected_ys)
         .mapv_into(|error| error.powi(2))
@@ -440,7 +444,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         prediction_not_ok_count,
         LocInfo {
             locs: prediction_not_ok,
-            xs_test: xs_test.view(),
+            xs_test: xs_test_features.view(),
             predicted_ys: predicted_ys.view(),
             expected_ys: expected_ys.view(),
             predicted_std: predicted_std.view(),
@@ -459,7 +463,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         allowed_noise,
         LocInfo {
             locs: std_not_ok,
-            xs_test: xs_test.view(),
+            xs_test: xs_test_features.view(),
             predicted_ys: predicted_ys.view(),
             expected_ys: expected_ys.view(),
             predicted_std: predicted_std.view(),
