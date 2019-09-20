@@ -1,5 +1,6 @@
 use itertools::Itertools as _;
 use ndarray::prelude::*;
+use rand::seq::SliceRandom as _;
 
 use crate::{Individual, Scalar, RNG};
 
@@ -129,11 +130,35 @@ impl Space {
         Individual::new(self.sample(rng))
     }
 
+    pub fn sample_individual_n<A>(&self, n: usize, rng: &mut RNG) -> Vec<Individual<A>> {
+        self.sample_n(n, rng)
+            .into_iter()
+            .map(|sample| Individual::new(sample))
+            .collect()
+    }
+
     pub fn sample(&self, rng: &mut RNG) -> Vec<ParameterValue> {
-        let sample = std::iter::repeat_with(|| rng.uniform(0.0..=1.0))
-            .take(self.len())
+        self.sample_n(1, rng).into_iter().next().unwrap()
+    }
+
+    /// Obtain multiple evenly-distributed random samples.
+    ///
+    /// Uses Latin Hypercube Sampling to cover the entire parameter space with even probability.
+    pub fn sample_n(&self, n: usize, rng: &mut RNG) -> Vec<Vec<ParameterValue>> {
+        let choices = self
+            .params
+            .iter()
+            .map(|param| {
+                let mut samples = param.sample_n(n, rng);
+                assert_eq!(samples.len(), n, "sample must contain n elements");
+                samples.shuffle(rng.basic_rng_mut());
+                samples
+            })
             .collect_vec();
-        self.project_from_features(&sample)
+        let samples = (0..n)
+            .map(|i| choices.iter().map(|samples| samples[i]).collect())
+            .collect();
+        samples
     }
 
     pub fn mutate_inplace(&self, sample: &mut [ParameterValue], relscale: &[f64], rng: &mut RNG) {
@@ -217,6 +242,42 @@ impl Parameter {
                 ParameterValue::Real(ref mut x) => *x = sample_truncnorm(*x, relscale, lo, hi, rng),
             },
         }
+    }
+
+    /// Obtain random samples of that parameter.
+    ///
+    /// If multiple samples are requested,
+    /// each sample is taken from an equi-distributed band
+    // so that the full parameter space is evenly covered.
+    fn sample_n(&self, n: usize, rng: &mut RNG) -> Vec<ParameterValue> {
+        let out = match *self {
+            Parameter::Real { lo, hi, .. } => {
+                assert!(lo < hi, "lo {} must be lower than hi {}", lo, hi);
+                let delta = (hi - lo) / (n as f64);
+                let bounds = (0..n).map(|x| (x as f64 * delta + lo)).collect_vec();
+
+                let last_window = bounds.last().cloned().unwrap_or(lo)..=hi;
+                assert!(
+                    last_window.start() < last_window.end(),
+                    "window for last sample must not be empty: {:?}",
+                    last_window
+                );
+                // select a sample in each window
+                let last_item =
+                    std::iter::once(rng.uniform(last_window)).take(if n > 0 { 1 } else { 0 });
+                let n_minus_one_items = bounds[..bounds.len()]
+                    .iter()
+                    .zip(&bounds[1..])
+                    .map(|(&window_lo, &window_hi)| rng.uniform(window_lo..window_hi));
+
+                n_minus_one_items
+                    .chain(last_item)
+                    .map(|x| ParameterValue::Real(x))
+                    .collect_vec()
+            }
+        };
+        assert_eq!(out.len(), n, "must have requested size");
+        out
     }
 }
 

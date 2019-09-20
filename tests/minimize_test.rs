@@ -95,6 +95,8 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
     let mut space = ggtune::Space::new();
     let mut args = ggtune::MinimizerArgs::default();
     setup(&mut space, &mut minimizer, &mut args);
+    args.output
+        .add_human_readable_individuals(std::io::stderr(), &space);
 
     let result = minimizer
         .minimize(&objective, space, &mut rng, args)

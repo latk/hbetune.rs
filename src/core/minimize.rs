@@ -400,9 +400,7 @@ where
     }
 
     fn make_initial_population(&self, rng: &mut RNG) -> Vec<Individual<A>> {
-        std::iter::repeat_with(|| self.space.sample_individual(rng))
-            .take(self.config.initial)
-            .collect_vec()
+        self.space.sample_individual_n(self.config.initial, rng)
     }
 
     fn evaluate_all(

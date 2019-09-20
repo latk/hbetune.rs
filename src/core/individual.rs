@@ -15,10 +15,7 @@ pub struct Individual<A> {
     cost: Option<A>,
 }
 
-impl<A> Individual<A>
-where
-    A: Copy,
-{
+impl<A> Individual<A> {
     /// Create a new individual at a certain sample.
     pub fn new(sample: Vec<ParameterValue>) -> Self {
         Individual {
@@ -53,12 +50,18 @@ where
     }
 
     /// The predicted value (write once).
-    pub fn prediction(&self) -> Option<A> {
+    pub fn prediction(&self) -> Option<A>
+    where
+        A: Copy,
+    {
         self.prediction
     }
 
     /// The expected improvement before the Individual was evaluated. Write-once.
-    pub fn expected_improvement(&self) -> Option<A> {
+    pub fn expected_improvement(&self) -> Option<A>
+    where
+        A: Copy,
+    {
         self.expected_improvement
     }
 
@@ -69,12 +72,18 @@ where
     }
 
     /// The observed value (write once).
-    pub fn observation(&self) -> Option<A> {
+    pub fn observation(&self) -> Option<A>
+    where
+        A: Copy,
+    {
         self.observation
     }
 
     /// The observed cost (write once).
-    pub fn cost(&self) -> Option<A> {
+    pub fn cost(&self) -> Option<A>
+    where
+        A: Copy,
+    {
         self.cost
     }
 
