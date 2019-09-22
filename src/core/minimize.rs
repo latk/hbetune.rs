@@ -37,6 +37,9 @@ pub struct OptimizationResult<A, Model> {
     all_individuals: Vec<Individual<A>>,
     all_models: Vec<Model>,
     duration: Duration,
+    suggestion: Vec<ParameterValue>,
+    suggestion_y: A,
+    suggestion_std: A,
 }
 
 impl<A, Model> OptimizationResult<A, Model> {
@@ -55,28 +58,17 @@ impl<A, Model> OptimizationResult<A, Model> {
         self.duration
     }
 
-    /// Select the best evaluation results.
-    pub fn best_n(&self, n: usize) -> impl Iterator<Item = &Individual<A>>
-    where
-        A: PartialOrd + Copy,
-    {
-        self.all_individuals
-            .iter()
-            .filter(|ind| ind.observation().is_some())
-            .sorted_by(|a, b| {
-                a.observation()
-                    .partial_cmp(&b.observation())
-                    .expect("observation should have an order")
-            })
-            .take(n)
+    /// Suggested location of the minimum.
+    pub fn suggestion(&self) -> &[ParameterValue] {
+        self.suggestion.as_slice()
     }
 
-    /// Best result.
-    pub fn best_individual(&self) -> Option<&Individual<A>>
+    /// Predicted value and uncertainty at the minimum.
+    pub fn suggestion_y_std(&self) -> (A, A)
     where
-        A: PartialOrd + Copy,
+        A: Copy,
     {
-        self.best_n(1).next()
+        (self.suggestion_y, self.suggestion_std)
     }
 
     /// Final model.
@@ -102,7 +94,10 @@ impl<A, Model> OptimizationResult<A, Model> {
     where
         A: Copy + PartialOrd,
     {
-        self.best_individual().and_then(|ind| ind.observation())
+        self.all_individuals()
+            .iter()
+            .map(|ind| ind.observation().expect("should have observation"))
+            .min_by(|a, b| a.partial_cmp(b).expect("observation should have an order"))
     }
 }
 
@@ -400,10 +395,16 @@ where
             fmin = find_fmin(all_evalutions.as_slice(), model).expect("fmin could be found");
         }
 
+        let (suggestion, suggestion_y, suggestion_std) =
+            self.suggest_optimum(all_models.last().unwrap(), all_evalutions.as_slice());
+
         Ok(OptimizationResult {
             all_individuals: all_evalutions,
             all_models,
             duration: total_duration.elapsed(),
+            suggestion,
+            suggestion_y,
+            suggestion_std,
         })
     }
 
@@ -548,6 +549,33 @@ where
                 .compare(a, b)
                 .expect("individuals should be orderable")
         })
+    }
+
+    fn suggest_optimum<'a>(
+        &'a self,
+        model: &'a Estimator::Model,
+        individuals: impl IntoIterator<Item = &'a Individual<A>>,
+    ) -> (Vec<ParameterValue>, A, A) {
+        let mut individuals = individuals.into_iter();
+        let mut suggestion = individuals
+            .next()
+            .expect("should have at least one individual")
+            .sample();
+        let (mut suggestion_y, mut suggestion_std) =
+            model.predict_mean_std_transformed(self.space.project_into_features(suggestion).into());
+
+        for ind in individuals {
+            let (candidate_y, candidate_std) = model.predict_mean_std_transformed(
+                self.space.project_into_features(ind.sample()).into(),
+            );
+            if candidate_y < suggestion_y {
+                suggestion = ind.sample();
+                suggestion_y = candidate_y;
+                suggestion_std = candidate_std;
+            }
+        }
+
+        (suggestion.to_vec(), suggestion_y, suggestion_std)
     }
 }
 

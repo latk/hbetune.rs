@@ -175,10 +175,12 @@ fn command_run(cfg: CliCommandRun) {
     let result = minimizer
         .minimize(objective.as_ref(), space, &mut rng, args)
         .expect("minimization should proceed successfully");
+    let suggestion = result.suggestion();
+    let (suggestion_y, suggestion_std) = result.suggestion_y_std();
     println!(
-        "best sample: {:?}",
-        result
-            .best_individual()
-            .expect("best individual should exist"),
+        "minimum at [{:?}] with predicted value {} ± {}",
+        suggestion.iter().format(" "),
+        suggestion_y,
+        suggestion_std,
     );
 }

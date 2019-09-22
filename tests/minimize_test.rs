@@ -165,10 +165,10 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
         .minimize(&objective, space, &mut rng, args)
         .expect("minimization should proceed successfully");
 
+    let (value, value_std) = result.suggestion_y_std();
+
     let guess: Array1<f64> = result
-        .best_individual()
-        .expect("there should be a best individual")
-        .sample()
+        .suggestion()
         .iter()
         .cloned()
         .map(Into::into)
@@ -188,10 +188,13 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
          |     distance: {distance}\n\
          | ideal points: {ideal}\n\
          |        guess: {guess}\n\
+         |        value: {value} ± {value_std}\n\
          |      history: {history:.2}",
         distance = distance,
         ideal = ideal.iter().format(", "),
         guess = guess,
+        value = value,
+        value_std = value_std,
         history = result
             .ys()
             .expect("there should be results")
