@@ -4,14 +4,25 @@ extern crate ggtune;
 extern crate itertools;
 extern crate noisy_float;
 
-use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn};
+use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn, ParameterValue};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
-fn sphere_objective<A: ggtune::Scalar>(xs: &[ggtune::ParameterValue]) -> A {
+fn sphere_objective<A: ggtune::Scalar>(xs: &[ParameterValue]) -> A {
     let xs_array = xs.iter().cloned().map(Into::into).collect_vec().into();
     let y: f64 = ggtune::benchfn::sphere(xs_array);
     A::from_f(y)
+}
+
+struct NoisySphereObjective {
+    sigma: f64,
+}
+
+impl<A: ggtune::Scalar> ggtune::ObjectiveFunction<A> for NoisySphereObjective {
+    fn run(&self, xs: &[ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
+        let y: f64 = sphere_objective(xs);
+        (A::from_f(rng.normal(y, self.sigma)), A::from_i(0))
+    }
 }
 
 #[test]
@@ -62,6 +73,58 @@ fn sphere_d2_edge() {
     );
 }
 
+#[test]
+fn sphere_d2_ints() {
+    run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
+        ObjectiveFunctionFromFn::new(sphere_objective),
+        98482,
+        &[array![0.0, 0.0]],
+        1e-5,
+        |space, minimizer, _args| {
+            minimizer.max_nevals = 30;
+            minimizer.popsize = 5;
+            space.add_integer_parameter("x1", -5, 5);
+            space.add_integer_parameter("x2", -3, 7);
+        },
+    );
+}
+
+#[test]
+fn sphere_d2_mixed_int_float() {
+    run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
+        ObjectiveFunctionFromFn::new(sphere_objective),
+        64026,
+        &[array![0.0, 0.0]],
+        0.05,
+        |space, minimizer, _args| {
+            minimizer.max_nevals = 40;
+            minimizer.popsize = 8;
+            space.add_integer_parameter("x1", -5, 15);
+            space.add_real_parameter("x2", -3.0, 2.0);
+        },
+    );
+}
+
+#[test]
+fn sphere_d2_noisy() {
+    run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
+        NoisySphereObjective { sigma: 1.0 },
+        2956349,
+        &[array![0.0, 0.0]],
+        0.2,
+        |space, minimizer, _args| {
+            minimizer.max_nevals = 60;
+            minimizer.popsize = 8;
+            minimizer.initial = 15;
+            space.add_integer_parameter("x1", -7, 9);
+            space.add_real_parameter("x2", -3.0, 2.0);
+        },
+    );
+}
+
 struct Types<A, Model> {
     marker: std::marker::PhantomData<(A, Model)>,
 }
@@ -95,8 +158,8 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
     let mut space = ggtune::Space::new();
     let mut args = ggtune::MinimizerArgs::default();
     setup(&mut space, &mut minimizer, &mut args);
-    args.output
-        .add_human_readable_individuals(std::io::stderr(), &space);
+    // args.output
+    //     .add_human_readable_individuals(std::io::stderr(), &space);
 
     let result = minimizer
         .minimize(&objective, space, &mut rng, args)

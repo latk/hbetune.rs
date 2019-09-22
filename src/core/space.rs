@@ -45,6 +45,18 @@ impl Space {
         });
     }
 
+    /// Add an integer-valued parameter.
+    /// The bounds `lo`, `hi` are inclusive.
+    /// Panics if the parameter range has zero size.
+    pub fn add_integer_parameter(&mut self, name: impl Into<String>, lo: i64, hi: i64) {
+        assert!(lo < hi);
+        self.add_parameter(Parameter::Int {
+            name: name.into(),
+            lo,
+            hi,
+        });
+    }
+
     pub fn add_parameter(&mut self, param: Parameter) {
         self.params.push(param);
     }
@@ -186,6 +198,7 @@ fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParameterValue {
     Real(f64),
+    Int(i64),
 }
 
 impl From<f64> for ParameterValue {
@@ -194,10 +207,17 @@ impl From<f64> for ParameterValue {
     }
 }
 
+impl From<i64> for ParameterValue {
+    fn from(x: i64) -> ParameterValue {
+        ParameterValue::Int(x)
+    }
+}
+
 impl Into<f64> for ParameterValue {
     fn into(self) -> f64 {
         match self {
             ParameterValue::Real(x) => x,
+            ParameterValue::Int(x) => x as f64,
         }
     }
 }
@@ -206,6 +226,7 @@ impl std::fmt::Display for ParameterValue {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             ParameterValue::Real(x) => write!(fmt, "{}", x),
+            ParameterValue::Int(x) => write!(fmt, "{}", x),
         }
     }
 }
@@ -213,19 +234,29 @@ impl std::fmt::Display for ParameterValue {
 #[derive(Debug, Clone)]
 pub enum Parameter {
     Real { name: String, lo: f64, hi: f64 },
+    Int { name: String, lo: i64, hi: i64 },
 }
 
 impl Parameter {
     pub fn name(&self) -> &str {
         match self {
             Parameter::Real { name, .. } => name,
+            Parameter::Int { name, .. } => name,
         }
     }
 
     fn project_into_features<A: Scalar>(&self, x: ParameterValue) -> A {
         match *self {
-            Parameter::Real { lo, hi, .. } => match x {
+            Parameter::Real { lo, hi, ref name } => match x {
                 ParameterValue::Real(x) => A::from_f((x - lo) / (hi - lo)),
+                x @ _ => unreachable!("Real({}): cannot project {:?} into features", name, x),
+            },
+            Parameter::Int { lo, hi, ref name } => match x {
+                // Why not "... / (hi - lo + 1)"?
+                // So that the min/max integers match the min/max feature space bounds.
+                // The corresponding rounding areas still match.
+                ParameterValue::Int(x) => A::from_f(((x - lo) as f64) / (hi - lo) as f64),
+                x @ _ => unreachable!("Int({}): cannot project {:?} into features", name, x),
             },
         }
     }
@@ -233,13 +264,31 @@ impl Parameter {
     fn project_from_features<A: Scalar>(&self, x: A) -> ParameterValue {
         match *self {
             Parameter::Real { lo, hi, .. } => ParameterValue::Real(x.into() * (hi - lo) + lo),
+            Parameter::Int { lo, hi, .. } => ParameterValue::Int(crate::util::clip(
+                (x.into() * (hi - lo + 1) as f64).floor() as i64 + lo,
+                Some(lo),
+                Some(hi),
+            )),
         }
     }
 
     fn mutate_inplace(&self, x: &mut ParameterValue, relscale: f64, rng: &mut RNG) {
         match *self {
-            Parameter::Real { lo, hi, .. } => match *x {
+            Parameter::Real { lo, hi, ref name } => match *x {
                 ParameterValue::Real(ref mut x) => *x = sample_truncnorm(*x, relscale, lo, hi, rng),
+                x @ _ => unreachable!("Real({}): cannot mutate {:?}", name, x),
+            },
+            Parameter::Int { ref name, .. } => match x {
+                x @ ParameterValue::Int { .. } => {
+                    *x = self.project_from_features(sample_truncnorm(
+                        self.project_into_features(*x),
+                        relscale,
+                        0.0,
+                        1.0,
+                        rng,
+                    ))
+                }
+                x @ _ => unreachable!("Int({}): cannot mutate {:?}", name, *x),
             },
         }
     }
@@ -248,37 +297,43 @@ impl Parameter {
     ///
     /// If multiple samples are requested,
     /// each sample is taken from an equi-distributed band
-    // so that the full parameter space is evenly covered.
+    /// so that the full parameter space is evenly covered.
     fn sample_n(&self, n: usize, rng: &mut RNG) -> Vec<ParameterValue> {
         let out = match *self {
             Parameter::Real { lo, hi, .. } => {
                 assert!(lo < hi, "lo {} must be lower than hi {}", lo, hi);
-                let delta = (hi - lo) / (n as f64);
-                let bounds = (0..n).map(|x| (x as f64 * delta + lo)).collect_vec();
-
-                let last_window = bounds.last().cloned().unwrap_or(lo)..=hi;
-                assert!(
-                    last_window.start() < last_window.end(),
-                    "window for last sample must not be empty: {:?}",
-                    last_window
-                );
-                // select a sample in each window
-                let last_item =
-                    std::iter::once(rng.uniform(last_window)).take(if n > 0 { 1 } else { 0 });
-                let n_minus_one_items = bounds[..bounds.len()]
-                    .iter()
-                    .zip(&bounds[1..])
-                    .map(|(&window_lo, &window_hi)| rng.uniform(window_lo..window_hi));
-
-                n_minus_one_items
-                    .chain(last_item)
-                    .map(|x| ParameterValue::Real(x))
+                sample_n_in_unit_range(n, rng)
+                    .into_iter()
+                    .map(|x| self.project_from_features(x))
                     .collect_vec()
             }
+            Parameter::Int { .. } => sample_n_in_unit_range(n, rng)
+                .into_iter()
+                .map(|x| self.project_from_features(x))
+                .collect_vec(),
         };
         assert_eq!(out.len(), n, "must have requested size");
         out
     }
+}
+
+fn sample_n_in_unit_range(n: usize, rng: &mut RNG) -> Vec<f64> {
+    let bounds = (0..n).map(|x| x as f64 / n as f64).collect_vec();
+
+    let last_window = bounds.last().cloned().unwrap_or(0.0)..=1.0;
+    assert!(
+        last_window.start() < last_window.end(),
+        "window for last sample must not be empty: {:?}",
+        last_window,
+    );
+    // select a sample in each window
+    let last_item = std::iter::once(rng.uniform(last_window)).take((n > 0) as usize);
+    let n_minus_one_items = bounds[..bounds.len()]
+        .iter()
+        .zip(&bounds[1..])
+        .map(|(&window_lo, &window_hi)| rng.uniform(window_lo..window_hi));
+
+    n_minus_one_items.chain(last_item).collect_vec()
 }
 
 impl std::str::FromStr for Parameter {
@@ -302,6 +357,18 @@ impl std::str::FromStr for Parameter {
             format_err!(
                 "too many items, expected: '<name> real <lo> <hi>' but got: {}",
                 s
+            )
+        };
+        let err_int_too_few_items = || {
+            format_err!(
+                "too few items, expected: '<name> int <lo> <hi>' but got: {}",
+                s,
+            )
+        };
+        let err_int_too_many_items = || {
+            format_err!(
+                "too many items, expected: '<name> int <lo> <hi>' but got: {}",
+                s,
             )
         };
 
@@ -328,7 +395,116 @@ impl std::str::FromStr for Parameter {
 
                 Ok(Parameter::Real { name, lo, hi })
             }
+            "int" => {
+                let lo = items
+                    .next()
+                    .ok_or_else(err_int_too_few_items)?
+                    .parse::<i64>()
+                    .with_context(|err| format!("while parsing <lo>: {}", err))?;
+
+                let hi = items
+                    .next()
+                    .ok_or_else(err_int_too_few_items)?
+                    .parse::<i64>()
+                    .with_context(|err| format!("while parsing <hi>: {}", err))?;
+
+                if items.next().is_some() {
+                    return Err(err_int_too_many_items());
+                }
+
+                Ok(Parameter::Int { name, lo, hi })
+            }
             t => bail!("type must be 'real', was: {}", t),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Parameter, ParameterValue, RNG};
+
+    #[test]
+    fn project_int() {
+        let param = Parameter::Int {
+            lo: -2,
+            hi: 6,
+            name: "foo".to_owned(),
+        };
+
+        let feature_min: f64 = param.project_into_features(ParameterValue::Int(-2));
+        let feature_max: f64 = param.project_into_features(ParameterValue::Int(6));
+
+        assert_eq!(
+            param.project_from_features(0.0),
+            ParameterValue::Int(-2),
+            "must project lower bound from features",
+        );
+
+        assert_eq!(
+            param.project_from_features(1.0),
+            ParameterValue::Int(6),
+            "must project upper bound from features",
+        );
+
+        assert_eq!(feature_min, 0.0, "feature should reach min bound");
+        assert_eq!(feature_max, 1.0, "feature should reach max bound");
+
+        assert_eq!(
+            param.project_into_features::<f64>(ParameterValue::Int(2)),
+            0.5,
+            "midpoint value should be midpoint of feature space",
+        );
+
+        for x in -2..=6 {
+            let value = ParameterValue::Int(x);
+            let feature = param.project_into_features(value);
+            assert_eq!(
+                param.project_from_features(feature),
+                value,
+                "must roundtrip for x={}",
+                x
+            );
+            assert!(
+                feature_min <= feature,
+                "feature {} satisfies lower bound {} (x={})",
+                feature,
+                feature_min,
+                x
+            );
+            assert!(
+                feature <= feature_max,
+                "feature {} satisfies upper bound {} (x={})",
+                feature,
+                feature_max,
+                x
+            );
+        }
+    }
+
+    #[test]
+    fn sample_int() {
+        let param = Parameter::Int {
+            lo: 1,
+            hi: 3,
+            name: "whatever".to_owned(),
+        };
+        let mut rng = RNG::new_with_seed(378);
+        let mut counts = [0; 3];
+        const EXPECTED_SAMPLES: usize = 20;
+        for value in param.sample_n(3 * EXPECTED_SAMPLES, &mut rng) {
+            match value {
+                ParameterValue::Int(x) => {
+                    counts[(x - 1) as usize] += 1;
+                }
+                x @ _ => unreachable!("only Int() should be possible: {:?}", x),
+            }
+        }
+        for &count in &counts {
+            assert!(
+                (EXPECTED_SAMPLES - 3) <= count && count <= (EXPECTED_SAMPLES + 3),
+                "counts must be roughly equal: {:?}",
+                counts
+            );
         }
     }
 }

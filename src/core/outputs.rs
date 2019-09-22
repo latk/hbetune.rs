@@ -117,6 +117,7 @@ where
             for x in ind.sample() {
                 row.add_cell(cell_right(match x {
                     ParameterValue::Real(x) => format!("{:.02}", x),
+                    ParameterValue::Int(x) => format!("{:2}", x),
                 }));
             }
         }
@@ -134,7 +135,7 @@ where
 
 #[test]
 fn test_human_readable_individuals_output() {
-    let mut ind = Individual::new(vec![0.123.into(), 12.2.into()]);
+    let mut ind = Individual::new(vec![0.123.into(), 12.2.into(), 3.into()]);
     ind.set_evaluation_result(3, 15.399, 0.759).unwrap();
     ind.set_prediction_and_ei(16.981, 0.178).unwrap();
 
@@ -142,17 +143,17 @@ fn test_human_readable_individuals_output() {
     {
         let mut output = HumanReadableIndividualsOutput {
             writer: Box::new(&mut buffer),
-            param_names: vec!["x".to_owned(), "y".to_owned()],
+            param_names: vec!["x".to_owned(), "y".to_owned(), "z".to_owned()],
         };
         output.event_evaluations_completed(&[ind], Duration::from_millis(170));
     }
     let actual = String::from_utf8(buffer).expect("wrote correct utf8");
     let expected = r#"evaluation completed in 0.17s:
------------------------------------------------
-gen observation prediction ei   cost x    y
---- ----------- ---------- ---- ---- ---- -----
-  3       15.40      16.98 0.18 0.76 0.12 12.20
------------------------------------------------
+--------------------------------------------------
+gen observation prediction ei   cost x    y     z
+--- ----------- ---------- ---- ---- ---- ----- --
+  3       15.40      16.98 0.18 0.76 0.12 12.20  3
+--------------------------------------------------
 "#;
     assert_eq!(
         actual, expected,
