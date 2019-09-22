@@ -28,7 +28,7 @@ impl Kernel for ConstantKernel {
         )
     }
 
-    fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
+    fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
         let kernel = self.kernel(x, x);
         let gradient = Array::from_elem(
             (x.shape()[0], x.shape()[0], 1),

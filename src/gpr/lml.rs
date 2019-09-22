@@ -35,7 +35,7 @@ fn lml_with_gradient<A: Scalar>(
     use ndarray_linalg::cholesky::*;
 
     // calculate combined gradient
-    let (mut kernel_matrix, kernel_gradient) = kernel.gradient(x_train);
+    let (mut kernel_matrix, kernel_gradient) = kernel.theta_grad(x_train);
     let noise_gradient = Array2::eye(x_train.rows()).insert_axis(Axis(2)) * noise;
     let gradient = stack!(Axis(2), noise_gradient, kernel_gradient);
 

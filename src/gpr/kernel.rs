@@ -10,9 +10,9 @@ pub trait Kernel: Clone + std::fmt::Debug {
     /// Input arrays have shape (n_samples, n_features).
     fn kernel<A: Scalar>(&self, x1: ArrayView2<A>, x2: ArrayView2<A>) -> Array2<A>;
 
-    /// Get the gradients of the kernel function in a certain position.
+    /// Get the gradients of the kernel function with respect to the hyperparameters theta.
     /// Input array has shape (n_samples, n_features).
-    fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>);
+    fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>);
 
     /// Get the diagonal of the kernel function in a certain position.
     /// Input array has shape (n_samples, n_features).

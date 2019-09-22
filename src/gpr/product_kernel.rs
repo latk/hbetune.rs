@@ -37,9 +37,9 @@ where
         self.k1.kernel(xa, xb) * self.k2.kernel(xa, xb)
     }
 
-    fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
-        let (kernel1, gradient1) = self.k1.gradient(x);
-        let (kernel2, gradient2) = self.k2.gradient(x);
+    fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
+        let (kernel1, gradient1) = self.k1.theta_grad(x);
+        let (kernel2, gradient2) = self.k2.theta_grad(x);
         let kernel = &kernel1 * &kernel2;
         let gradient = stack!(
             Axis(2),
@@ -141,7 +141,7 @@ fn it_produces_a_kernel_and_gradient() {
         ]
     ];
 
-    let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
+    let (actual_kernel, actual_gradient) = kernel.theta_grad(x.view());
     assert_all_close!(&actual_kernel, &kernel_matrix, 1e-3);
     assert_all_close!(actual_gradient, gradient_matrix, 1e-3);
     assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);

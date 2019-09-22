@@ -79,7 +79,7 @@ impl Kernel for Matern {
         }
     }
 
-    fn gradient<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
+    fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
         let kernel = self.kernel(x, x);
         let gradient_shape = (x.rows(), x.rows(), self.n_params());
         let length_scale = self.length_scale_array().mapv(A::from_f);
@@ -212,7 +212,7 @@ fn it_produces_a_kernel_and_gradient_with_nu_3_2() {
         [[0.0623887, 0.24955481], [0., 0.53076362], [0., 0.]]
     ];
 
-    let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
+    let (actual_kernel, actual_gradient) = kernel.theta_grad(x.view());
     assert_all_close!(&actual_kernel, &kernel_matrix, 0.001);
     assert_all_close!(actual_gradient, gradient_matrix, 0.001);
     assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);
@@ -244,7 +244,7 @@ fn it_produces_a_kernel_and_gradient_with_nu_5_2() {
         [[0.06737947, 0.26951788], [0., 0.57644039], [0., 0.]]
     ];
 
-    let (actual_kernel, actual_gradient) = kernel.gradient(x.view());
+    let (actual_kernel, actual_gradient) = kernel.theta_grad(x.view());
     assert_all_close!(&actual_kernel, &kernel_matrix, 0.001);
     assert_all_close!(actual_gradient, gradient_matrix, 0.001);
     assert_all_close!(kernel.diag(x.view()), actual_kernel.diag(), 1e-3);
