@@ -561,20 +561,38 @@ where
             .next()
             .expect("should have at least one individual")
             .sample();
-        let (mut suggestion_y, mut suggestion_std) =
-            model.predict_mean_std_transformed(self.space.project_into_features(suggestion).into());
+        let mut suggestion_y =
+            model.predict_mean_transformed(self.space.project_into_features(suggestion).into());
 
         for ind in individuals {
-            let (candidate_y, candidate_std) = model.predict_mean_std_transformed(
+            let candidate_y = model.predict_mean_transformed(
                 self.space.project_into_features(ind.sample()).into(),
             );
             if candidate_y < suggestion_y {
                 suggestion = ind.sample();
                 suggestion_y = candidate_y;
-                suggestion_std = candidate_std;
             }
         }
 
+        // We now have the minimum evaluated point.
+        // Use that as a starting point for minimization of the response surface.
+        let mut suggestion_features = self.space.project_into_features(suggestion);
+        crate::util::minimize_without_gradient(
+            |x, maybe_grad, _data| {
+                assert!(maybe_grad.is_none(), "cannot provide gradients");
+                let x_design = self.space.project_from_features(x);
+                let x_normalized = self.space.project_into_features(x_design.as_slice());
+                let y = model.predict_mean_transformed(x_normalized.into()).into();
+                // eprintln!("suggestion: evaluating {:?} -> {}", x_design.iter().format(" "), y);
+                y
+            },
+            suggestion_features.as_mut_slice(),
+            vec![(0.0, 1.0); self.space.len()].as_slice(),
+            (),
+        );
+
+        let (suggestion_y, suggestion_std) = model.predict_mean_std_transformed(
+            self.space.project_into_features(suggestion).into());
         (suggestion.to_vec(), suggestion_y, suggestion_std)
     }
 }

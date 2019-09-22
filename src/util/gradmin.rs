@@ -88,3 +88,30 @@ speculate! {
         }
     }
 }
+
+pub fn minimize_without_gradient<F, Data>(
+    objective: F,
+    x: &mut [f64],
+    bounds: &[Bounds],
+    data: Data,
+) -> f64
+where
+    F: Fn(&[f64], Option<&mut [f64]>, &mut Data) -> f64,
+{
+    let (bounds_lo, bounds_hi): (Vec<_>, Vec<_>) = bounds.iter().cloned().unzip();
+    let mut opt = nlopt::Nlopt::new(
+        nlopt::Algorithm::Bobyqa,
+        x.len(),
+        objective,
+        nlopt::Target::Minimize,
+        data,
+    );
+    opt.set_lower_bounds(bounds_lo.as_slice()).unwrap();
+    opt.set_upper_bounds(bounds_hi.as_slice()).unwrap();
+    opt.set_maxeval(150).unwrap();
+    // TODO check result properly
+    match opt.optimize(x) {
+        Ok((_, f)) => f,
+        Err((_, f)) => f,
+    }
+}

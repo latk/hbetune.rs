@@ -116,7 +116,7 @@ fn sphere_d2_noisy() {
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
-            minimizer.max_nevals = 60;
+            minimizer.max_nevals = 70;
             minimizer.popsize = 8;
             minimizer.initial = 15;
             space.add_integer_parameter("x1", -7, 9);
