@@ -144,10 +144,12 @@ pub struct Minimizer {
     #[structopt(long, default_value = "prediction")]
     pub fmin_via: FitnessVia,
 
-    /// How many random samples are suggested per generation.
-    /// Usually, new samples are created by random mutations of existing samples.
-    #[structopt(long, default_value = "1")]
-    pub n_replacements: usize,
+    /// Mean rate at which rejected individuals are given a second chance
+    /// when selecting between parents and offspring for a new population.
+    /// Towards zero, there is only offspring-parent competition.
+    /// Towards one, all individuals compete against each other.
+    #[structopt(long, default_value = "0.25")]
+    pub competition_rate: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -180,7 +182,7 @@ impl Default for Minimizer {
             relscale_attenuation: 0.9,
             select_via: FitnessVia::Observation,
             fmin_via: FitnessVia::Prediction,
-            n_replacements: 1,
+            competition_rate: 0.25,
         }
     }
 }
@@ -245,6 +247,12 @@ impl Minimizer {
             max_nevals = self.max_nevals,
             initial = self.initial,
             popsize = self.popsize
+        );
+
+        assert!(
+            0.0 <= self.competition_rate && self.competition_rate <= 1.0,
+            "competition rate {} must be in range [0, 1]",
+            self.competition_rate,
         );
 
         let acquisition_strategy =
@@ -388,7 +396,7 @@ where
             all_models.push(next_model);
             let model = all_models.last().unwrap();
 
-            population = self.select(population, offspring, model);
+            population = self.select(population, offspring, model, rng);
             fmin = find_fmin(all_evalutions.as_slice(), model).expect("fmin could be found");
         }
 
@@ -528,12 +536,14 @@ where
         parents: Vec<Individual<A>>,
         offspring: Vec<Individual<A>>,
         model: &Estimator::Model,
+        rng: &mut RNG,
     ) -> Vec<Individual<A>> {
         let fitness_operator = FitnessOperator(model, &self.space, self.config.select_via);
 
         let (selected, rejected) = select_next_population(parents, offspring, fitness_operator);
 
-        replace_worst_n_individuals(self.config.n_replacements, selected, rejected, |a, b| {
+        let n_second_chance = rng.binom(self.config.popsize, self.config.competition_rate);
+        replace_worst_n_individuals(n_second_chance, selected, rejected, |a, b| {
             fitness_operator
                 .compare(a, b)
                 .expect("individuals should be orderable")

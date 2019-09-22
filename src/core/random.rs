@@ -3,6 +3,7 @@ extern crate rand_core;
 extern crate rand_xoshiro;
 use rand::distributions::{self, Distribution as _};
 use rand_core::SeedableRng;
+use std::convert::TryInto as _;
 
 type BasicRNG = rand_xoshiro::Xoshiro256StarStar;
 
@@ -36,5 +37,12 @@ impl RNG {
 
     pub fn normal(&mut self, mean: f64, std: f64) -> f64 {
         distributions::Normal::new(mean, std).sample(self.basic_rng_mut())
+    }
+
+    pub fn binom(&mut self, n: usize, p: f64) -> usize {
+        distributions::Binomial::new(n.try_into().expect("n fits into u64"), p)
+            .sample(self.basic_rng_mut())
+            .try_into()
+            .expect("binom result fits into usize")
     }
 }

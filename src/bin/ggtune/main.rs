@@ -154,6 +154,11 @@ fn command_run(cfg: CliCommandRun) {
         objective,
     } = cfg;
 
+    assert!(
+        !params.is_empty(),
+        "Option --param must be provided at least once"
+    );
+
     let mut space = ggtune::Space::new();
     for param in params {
         space.add_parameter(param.clone());
