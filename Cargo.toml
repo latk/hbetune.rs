@@ -21,6 +21,7 @@ rayon = "1.1"  # for simple multi-threading
 statrs = "0.11.0"  # for random distributions
 strfmt = "0.1.6"  # for text substitution of command line params
 structopt = "0.3.2"  # for command-line interface
+serde_json = "1.0.40"
 
 # the rand crates must share a common rand_core version,
 # which prevents us from always using the lastest
@@ -30,6 +31,7 @@ rand_xoshiro = "^0.2"  # a state of the art RNG
 
 [dev-dependencies]
 speculate = "0.1.2"
+assert_cmd = "0.11.1"
 
 [profile.test]
 opt-level = 2  # otherwise, tests run too slow

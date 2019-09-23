@@ -1,39 +1,22 @@
 #[macro_use]
 extern crate ndarray;
+extern crate assert_cmd;
 extern crate ggtune;
 extern crate itertools;
 extern crate noisy_float;
+extern crate serde_json;
 
+use assert_cmd::prelude::*;
 use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn, ParameterValue};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
+use serde_json::json;
+use std::process::Command;
 
 fn sphere_objective<A: ggtune::Scalar>(xs: &[ParameterValue]) -> A {
     let xs_array = xs.iter().cloned().map(Into::into).collect_vec().into();
     let y: f64 = ggtune::benchfn::sphere(xs_array);
     A::from_f(y)
-}
-
-struct NoisySphereObjective {
-    sigma: f64,
-}
-
-impl<A: ggtune::Scalar> ggtune::ObjectiveFunction<A> for NoisySphereObjective {
-    fn run(&self, xs: &[ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
-        let y: f64 = sphere_objective(xs);
-        (A::from_f(rng.normal(y, self.sigma)), A::from_i(0))
-    }
-}
-
-struct NoisyAbsObjective {
-    sigma: f64,
-}
-
-impl<A: ggtune::Scalar> ggtune::ObjectiveFunction<A> for NoisyAbsObjective {
-    fn run(&self, xs: &[ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
-        let y: f64 = xs.iter().cloned().map(|x| Into::<f64>::into(x).abs()).sum();
-        (A::from_f(rng.normal(y, self.sigma)), A::from_i(0))
-    }
 }
 
 #[test]
@@ -119,40 +102,38 @@ fn sphere_d2_mixed_int_float() {
 }
 
 #[test]
-fn sphere_d2_noisy() {
-    run_minimize_test(
-        Types::<f64, EstimatorGPR>::default(),
-        NoisySphereObjective { sigma: 1.0 },
-        2_956_349,
-        &[array![0.0, 0.0]],
-        0.2,
-        |space, minimizer, _args| {
-            minimizer.max_nevals = 70;
-            minimizer.popsize = 8;
-            minimizer.initial = 15;
-            space.add_integer_parameter("x1", -7, 9);
-            space.add_real_parameter("x2", -3.0, 2.0);
-        },
-    );
+fn sphere_d2_noisy_integration() {
+    run_integration_test(&[array![0.0, 0.0]], 0.2, |command| {
+        command
+            .arg("run")
+            .arg("--seed=2956349")
+            .arg("--max-nevals=70")
+            .arg("--popsize=8")
+            .arg("--initial=15")
+            .arg("--param=x1 int -7 9")
+            .arg("--param=x2 real -3 2")
+            .arg("function")
+            .arg("--noise=1")
+            .arg("sphere");
+    });
 }
 
 #[test]
-fn abs_d2_log_noisy() {
-    run_minimize_test(
-        Types::<f64, EstimatorGPR>::default(),
-        NoisyAbsObjective { sigma: 1.0 },
-        82_348,
-        &[array![0.0, 1.0]],
-        0.2,
-        |space, minimizer, _args| {
-            minimizer.max_nevals = 70;
-            minimizer.popsize = 8;
-            minimizer.initial = 15;
-            minimizer.relscale_attenuation = 0.85;
-            space.add_logint_parameter("x1", -10, 1000, Some(11));
-            space.add_logreal_parameter("x1", 1.0, 2000.0, None);
-        },
-    );
+fn abs_d2_log_noisy_integration() {
+    run_integration_test(&[array![0.0, 1.0]], 0.2, |command| {
+        command
+            .arg("run")
+            .arg("--seed=82348")
+            .arg("--max-nevals=70")
+            .arg("--popsize=8")
+            .arg("--initial=15")
+            .arg("--relscale-attenuation=0.85")
+            .arg("--param=x1 logint -10 1000 11")
+            .arg("--param=x2 logreal 1 2000")
+            .arg("function")
+            .arg("sum-abs")
+            .arg("--noise=1.0");
+    });
 }
 
 struct Types<A, Model> {
@@ -164,6 +145,55 @@ impl<A, Model> Default for Types<A, Model> {
         Self {
             marker: std::marker::PhantomData::default(),
         }
+    }
+}
+
+fn run_integration_test<Setup>(ideal: &[Array1<f64>], max_distance: f64, setup: Setup)
+where
+    Setup: Fn(&mut Command) -> (),
+{
+    let mut command = Command::cargo_bin("ggtune").unwrap();
+    setup(&mut command);
+    let output = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .output()
+        .expect("test command failed to execute");
+
+    assert!(
+        output.status.success(),
+        "test command must execute successfully but status was {}",
+        output.status
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("test command output must be UTF-8");
+    static RESULT_MARKER: &str = "optimization result: ";
+    let result_location = stdout
+        .find(RESULT_MARKER)
+        .expect("output must contain result marker");
+    let result_json = &stdout[result_location + RESULT_MARKER.len()..];
+    let result: serde_json::Value =
+        serde_json::from_str(result_json).expect("optimization result must be JSON");
+
+    let location: &[_] = result["location"]
+        .as_array()
+        .expect("result location must be array");
+    let distance = distance_to_ideal_points(
+        &location
+            .iter()
+            .map(|x| x["value"].as_f64().expect("value must be a number"))
+            .collect_vec()
+            .into(),
+        ideal,
+    );
+
+    if distance > max_distance {
+        let mut data = result.clone();
+        data["distance"] = json!(distance);
+        data["max distance"] = json!(max_distance);
+        data["ideal points"] = json!(ideal.iter().map(|x| x.to_vec()).collect_vec());
+        panic!("optimal point was not found {:#}", data);
     }
 }
 
@@ -204,13 +234,7 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
         .map(Into::into)
         .collect();
 
-    let distance: f64 = ideal
-        .iter()
-        .map(|ideal| (ideal - &guess).mapv(|x| x.powi(2)).sum().sqrt())
-        .map(ggtune::Scalar::to_n64)
-        .min()
-        .expect("there should be a minimal distance")
-        .into();
+    let distance = distance_to_ideal_points(&guess, ideal);
 
     assert!(
         distance < max_distance,
@@ -231,4 +255,14 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
             .iter()
             .format(", "),
     );
+}
+
+fn distance_to_ideal_points(actual: &Array1<f64>, ideal_points: &[Array1<f64>]) -> f64 {
+    ideal_points
+        .iter()
+        .map(|ideal| (ideal - actual).mapv(|x| x.powi(2)).sum().sqrt())
+        .map(noisy_float::types::n64)
+        .min()
+        .expect("there should be a minimal distance")
+        .into()
 }

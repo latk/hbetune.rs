@@ -6,8 +6,10 @@ extern crate itertools;
 extern crate ndarray;
 #[macro_use]
 extern crate failure;
+extern crate serde_json;
 
 use itertools::Itertools as _;
+use serde_json::json;
 use structopt::StructOpt as _;
 
 mod objective_shell;
@@ -92,6 +94,7 @@ enum BenchFn {
     Rastrigin { amplitude: f64 },
     Rosenbrock,
     Onemax,
+    SumAbs,
 }
 
 impl std::str::FromStr for BenchFn {
@@ -106,7 +109,8 @@ impl std::str::FromStr for BenchFn {
             "rastrigin" => BenchFn::Rastrigin { amplitude: 10.0 },
             "rosenbrock" => BenchFn::Rosenbrock,
             "onemax" | "sum" => BenchFn::Onemax,
-            _ => bail!("expected sphere, got: {:?}", name),
+            "sum-abs" => BenchFn::SumAbs,
+            _ => bail!("expected a benchmark function name, got: {:?}", name),
         })
     }
 }
@@ -121,8 +125,11 @@ impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
                 2,
                 "objective function requires exactly two dimensions"
             ),
-            BenchFn::Sphere | BenchFn::Rastrigin { .. } | BenchFn::Rosenbrock | BenchFn::Onemax => {
-            }
+            BenchFn::Sphere
+            | BenchFn::Rastrigin { .. }
+            | BenchFn::Rosenbrock
+            | BenchFn::Onemax
+            | BenchFn::SumAbs => {}
         };
         let y = match self.function {
             BenchFn::Sphere => benchfn::sphere(xs.into()),
@@ -132,6 +139,7 @@ impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
             BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs.into(), amplitude),
             BenchFn::Rosenbrock => benchfn::rosenbrock(xs.into()),
             BenchFn::Onemax => benchfn::onemax(xs.into()),
+            BenchFn::SumAbs => benchfn::sum_abs(xs.into()),
         };
         (rng.normal(y, self.noise), Default::default())
     }
@@ -173,14 +181,32 @@ fn command_run(cfg: CliCommandRun) {
         .add_human_readable_individuals(std::io::stdout(), &space);
 
     let result = minimizer
-        .minimize(objective.as_ref(), space, &mut rng, args)
+        .minimize(objective.as_ref(), space.clone(), &mut rng, args)
         .expect("minimization should proceed successfully");
+
     let suggestion = result.suggestion();
     let (suggestion_y, suggestion_std) = result.suggestion_y_std();
+
     println!(
-        "minimum at [{:?}] with predicted value {} ± {}",
-        suggestion.iter().format(" "),
-        suggestion_y,
-        suggestion_std,
+        "optimization result: {:#}",
+        json!({
+            "location": space.params()
+                .iter()
+                .zip_eq(suggestion)
+                .map(|(param, value)| json!({
+                    "name": param.name(),
+                    "type": match value {
+                        ggtune::ParameterValue::Real(_) => "real",
+                        ggtune::ParameterValue::Int(_) => "int",
+                    },
+                    "value": match value {
+                        ggtune::ParameterValue::Real(x) => json!(x),
+                        ggtune::ParameterValue::Int(x) => json!(x),
+                    },
+                }))
+                .collect_vec(),
+            "mean": suggestion_y,
+            "std": suggestion_std,
+        })
     );
 }

@@ -221,3 +221,11 @@ where
 {
     xs.sum()
 }
+
+pub fn sum_abs<S, A>(xs: ArrayBase<S, Ix1>) -> A
+where
+    S: Data<Elem = A>,
+    A: Clone + std::ops::Add + num_traits::identities::Zero + num_traits::Signed,
+{
+    xs.mapv(|x| x.abs()).sum()
+}
