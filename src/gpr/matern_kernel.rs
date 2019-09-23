@@ -187,6 +187,7 @@ impl Kernel for Matern {
 }
 
 #[test]
+#[allow(clippy::unreadable_literal)]
 fn it_produces_a_kernel_and_gradient_with_nu_3_2() {
     let kernel = Matern::new(
         1.5,
@@ -219,6 +220,7 @@ fn it_produces_a_kernel_and_gradient_with_nu_3_2() {
 }
 
 #[test]
+#[allow(clippy::unreadable_literal)]
 fn it_produces_a_kernel_and_gradient_with_nu_5_2() {
     let kernel = Matern::new(
         2.5,

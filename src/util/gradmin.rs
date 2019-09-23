@@ -66,7 +66,9 @@ where
 speculate! {
 
     fn slanted_plane(x: &[f64], grad: Option<&mut [f64]>, _: &mut ()) -> f64 {
-        grad.map(|grad| grad.copy_from_slice(&[1.0, 1.0]));
+        if let Some(grad) = grad {
+            grad.copy_from_slice(&[1.0, 1.0]);
+        }
         x.iter().sum()
     }
 

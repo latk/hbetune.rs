@@ -41,7 +41,7 @@ fn sphere_d2_f64() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        582347,
+        582_347,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -57,7 +57,7 @@ fn sphere_d2_f32() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        582347,
+        582_347,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -73,7 +73,7 @@ fn sphere_d2_edge() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        1098438,
+        1_098_438,
         &[array![0.1, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -89,7 +89,7 @@ fn sphere_d2_ints() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        98482,
+        98_482,
         &[array![0.0, 0.0]],
         1e-5,
         |space, minimizer, _args| {
@@ -106,7 +106,7 @@ fn sphere_d2_mixed_int_float() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        64026,
+        64_026,
         &[array![0.0, 0.0]],
         0.05,
         |space, minimizer, _args| {
@@ -123,7 +123,7 @@ fn sphere_d2_noisy() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         NoisySphereObjective { sigma: 1.0 },
-        2956349,
+        2_956_349,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -141,7 +141,7 @@ fn abs_d2_log_noisy() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         NoisyAbsObjective { sigma: 1.0 },
-        82348,
+        82_348,
         &[array![0.0, 1.0]],
         0.2,
         |space, minimizer, _args| {

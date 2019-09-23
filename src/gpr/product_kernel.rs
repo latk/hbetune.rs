@@ -98,6 +98,7 @@ impl<K1: Kernel, K2: Kernel> std::fmt::Debug for Product<K1, K2> {
 }
 
 #[test]
+#[allow(clippy::unreadable_literal)]
 fn it_produces_a_kernel_and_gradient() {
     use crate::gpr::{ConstantKernel, Matern};
     use crate::util::BoundedValue;

@@ -19,7 +19,7 @@ impl<A> Individual<A> {
     /// Create a new individual at a certain sample.
     pub fn new(sample: Vec<ParameterValue>) -> Self {
         Individual {
-            sample: sample,
+            sample,
             gen: None,
             prediction: None,
             expected_improvement: None,

@@ -581,9 +581,7 @@ where
                 assert!(maybe_grad.is_none(), "cannot provide gradients");
                 let x_design = self.space.project_from_features(x);
                 let x_normalized = self.space.project_into_features(x_design.as_slice());
-                let y = model.predict_mean_transformed(x_normalized.into()).into();
-                // eprintln!("suggestion: evaluating {:?} -> {}", x_design.iter().format(" "), y);
-                y
+                model.predict_mean_transformed(x_normalized.into()).into()
             },
             suggestion_features.as_mut_slice(),
             vec![(0.0, 1.0); self.space.len()].as_slice(),

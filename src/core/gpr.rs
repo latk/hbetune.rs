@@ -138,7 +138,7 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         prior: Option<&Self::Model>,
         rng: &mut RNG,
     ) -> Result<Self::Model, Self::Error> {
-        let (n_observations, n_features) = x.dim();
+        let (n_observations, _n_features) = x.dim();
         assert!(
             y.len() == n_observations,
             "expected y values for {} observations: {}",

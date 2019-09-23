@@ -99,7 +99,7 @@ speculate! {
                 let model = make_model();
                 let xs = array![0.1, 0.5, 0.9];
                 let expected_ys = array![1.0, 2.0, 3.0];
-                let predicted_ys = xs.mapv(|x| model.predict(x.clone()));
+                let predicted_ys = xs.mapv(|x| model.predict(x));
                 let predicted_std = xs.mapv(|x| model.uncertainty(x));
                 eprintln!("us = {} std = {}", predicted_ys, predicted_std);
                 assert_all_close!(predicted_ys, expected_ys, 0.1);
@@ -279,7 +279,7 @@ macro_rules! parametrize {
 }
 
 parametrize!(it_works_in_2d(
-    { rng123: 123, rng171718: 171718, rng6657: 6657 },
+    { rng123: 123, rng171718: 171_718, rng6657: 6657 },
     { gridtraining: "gridTraining", randomtraining: "randomTraining" },
     { nonoise: 0.0, lownoise: 0.1, mediumnoise: 1.0, highnoise: 4.0 },
     { selftest: "selftest", newsample: "newsample" },
@@ -293,7 +293,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     let xs_features = generate_training_set(training_set, &mut rng);
 
     let ys = xs_features
-        .map_axis(Axis(1), |ax| sphere(ax))
+        .map_axis(Axis(1), sphere)
         .mapv_into(|y| rng.normal(y, noise_level));
 
     let model = train_model(xs_features.clone(), ys, &mut rng);
@@ -321,20 +321,17 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         space.add_real_parameter("x", -2.0, 2.0);
         space.add_real_parameter("y", -2.0, 2.0);
 
-        let model = <EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+        <EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
             .length_scale_bounds(vec![(1e-2, 2e1); 2])
             .noise_bounds(1e-2, 1e1)
             .n_restarts_optimizer(1)
             .estimate(xs.clone(), ys, None, rng)
-            .expect("model should train successfully");
-
-        model
+            .expect("model should train successfully")
     }
 
     let cond = |cond, value| if cond { Some(value) } else { None };
 
-    let allowed_failures = 0
-        + (noise_level > 1.0) as usize
+    let allowed_failures = (noise_level > 1.0) as usize
         + (testmode == "newsample") as usize
         + ((training_set, testmode) == ("randomTraining", "newsample")) as usize;
 
@@ -361,7 +358,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         _ => unimplemented!("{}", testmode),
     };
 
-    let expected_ys = xs_test_features.map_axis(Axis(1), |ax| sphere(ax));
+    let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
     let (predicted_ys, predicted_std) =
         model.predict_mean_std_transformed_a(xs_test_features.clone());
 
@@ -375,7 +372,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
 
     fn index_locs<'a, T>(
         items: impl IntoIterator<Item = T> + 'a,
-        locs: &'a Vec<bool>,
+        locs: &'a [bool],
     ) -> impl Iterator<Item = T> + 'a {
         items
             .into_iter()
@@ -429,9 +426,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     }
 
     let bound = |zscore: f64| {
-        let bounds =
-            expected_ys.clone() + zscore * &predicted_std + zscore.signum() * allowed_noise;
-        bounds
+        expected_ys.clone() + zscore * &predicted_std + zscore.signum() * allowed_noise
     };
 
     let prediction_not_ok = izip!(bound(-2.0).iter(), predicted_ys.iter(), bound(1.0).iter())
@@ -453,7 +448,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
 
     let std_not_ok = predicted_std
         .iter()
-        .map(|&std| !(std < 1.5 * allowed_noise))
+        .map(|&std| std >= 1.5 * allowed_noise)
         .collect_vec();
     let std_not_ok_count: usize = std_not_ok.iter().map(|&ok| ok as usize).sum();
     assert!(

@@ -146,7 +146,7 @@ impl Space {
         let features = xs
             .into_iter()
             .map(|x| self.project_into_features(x.as_ref()))
-            .map(|x| Array1::from(x))
+            .map(Array1::from)
             .collect_vec();
         ndarray::stack(
             Axis(0),
@@ -195,7 +195,7 @@ impl Space {
     pub fn sample_individual_n<A>(&self, n: usize, rng: &mut RNG) -> Vec<Individual<A>> {
         self.sample_n(n, rng)
             .into_iter()
-            .map(|sample| Individual::new(sample))
+            .map(Individual::new)
             .collect()
     }
 
@@ -217,10 +217,9 @@ impl Space {
                 samples
             })
             .collect_vec();
-        let samples = (0..n)
+        (0..n)
             .map(|i| choices.iter().map(|samples| samples[i]).collect())
-            .collect();
-        samples
+            .collect()
     }
 
     pub fn mutate_inplace(&self, sample: &mut [ParameterValue], relscale: &[f64], rng: &mut RNG) {
@@ -331,14 +330,14 @@ impl Parameter {
         match *self {
             Parameter::Real { lo, hi, ref name } => match x {
                 ParameterValue::Real(x) => A::from_f(project_into_range(x, lo, hi)),
-                x @ _ => unreachable!("Real({}): cannot project {:?} into features", name, x),
+                x => unreachable!("Real({}): cannot project {:?} into features", name, x),
             },
             Parameter::Int { lo, hi, ref name } => match x {
                 // Why not "... / (hi - lo + 1)"?
                 // So that the min/max integers match the min/max feature space bounds.
                 // The corresponding rounding areas still match.
                 ParameterValue::Int(x) => A::from_f(((x - lo) as f64) / (hi - lo) as f64),
-                x @ _ => unreachable!("Int({}): cannot project {:?} into features", name, x),
+                x => unreachable!("Int({}): cannot project {:?} into features", name, x),
             },
             Parameter::LogReal {
                 lo,
@@ -351,7 +350,7 @@ impl Parameter {
                     (lo + offset).ln(),
                     (hi + offset).ln(),
                 )),
-                x @ _ => unreachable!("LogReal({}): cannot project {:?} into features", name, x),
+                x => unreachable!("LogReal({}): cannot project {:?} into features", name, x),
             },
             Parameter::LogInt {
                 lo,
@@ -366,7 +365,7 @@ impl Parameter {
                     let feature = (logx - loglo) / logsize;
                     A::from_f(crate::util::clip(feature, Some(0.0), Some(1.0)))
                 }
-                x @ _ => unreachable!("LogInt({}): cannot project {:?} into features", name, x),
+                x => unreachable!("LogInt({}): cannot project {:?} into features", name, x),
             },
         }
     }
@@ -399,7 +398,7 @@ impl Parameter {
                 ParameterValue::Real(ref mut x) => {
                     *x = sample_truncnorm(*x, relscale * (hi - lo), lo, hi, rng)
                 }
-                x @ _ => unreachable!("Real({}): cannot mutate {:?}", name, x),
+                x => unreachable!("Real({}): cannot mutate {:?}", name, x),
             },
             Parameter::Int { .. } | Parameter::LogInt { .. } => match x {
                 x @ ParameterValue::Int { .. } => {
@@ -411,7 +410,7 @@ impl Parameter {
                         rng,
                     ))
                 }
-                x @ _ => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
+                x => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
             },
             Parameter::LogReal { .. } => match x {
                 x @ ParameterValue::Real { .. } => {
@@ -423,7 +422,7 @@ impl Parameter {
                         rng,
                     ))
                 }
-                x @ _ => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
+                x => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
             },
         }
     }
@@ -482,7 +481,7 @@ impl std::str::FromStr for Parameter {
 
         fn no_more_items(mut items: impl Iterator) -> Result<(), failure::Error> {
             if items.next().is_some() {
-                return Err(format_err!("too many items"));
+                Err(format_err!("too many items"))
             } else {
                 Ok(())
             }
@@ -598,6 +597,7 @@ mod test {
 
         let feature_min: f64 = param.project_into_features(ParameterValue::Int(-2));
         let feature_max: f64 = param.project_into_features(ParameterValue::Int(6));
+        let feature_mid: f64 = param.project_into_features(ParameterValue::Int(2));
 
         assert_eq!(
             param.project_from_features(0.0),
@@ -611,24 +611,25 @@ mod test {
             "must project upper bound from features",
         );
 
-        assert_eq!(feature_min, 0.0, "feature should reach min bound");
-        assert_eq!(feature_max, 1.0, "feature should reach max bound");
+        assert!(
+            approx_eq!(f64, feature_min, 0.0),
+            "feature should reach min bound"
+        );
+        assert!(
+            approx_eq!(f64, feature_max, 1.0),
+            "feature should reach max bound"
+        );
 
-        assert_eq!(
-            param.project_into_features::<f64>(ParameterValue::Int(2)),
-            0.5,
-            "midpoint value should be midpoint of feature space",
+        assert!(
+            approx_eq!(f64, feature_mid, 0.5),
+            "midpoint value should be midpoint of feature space"
         );
 
         for x in -2..=6 {
             let value = ParameterValue::Int(x);
             let feature = param.project_into_features(value);
-            assert_eq!(
-                param.project_from_features(feature),
-                value,
-                "must roundtrip for x={}",
-                x
-            );
+            let roundtrip = param.project_from_features(feature);
+            assert_eq!(roundtrip, value, "must roundtrip for x={}", x);
             assert!(
                 feature_min <= feature,
                 "feature {} satisfies lower bound {} (x={})",
@@ -661,7 +662,7 @@ mod test {
                 ParameterValue::Int(x) => {
                     counts[(x - 1) as usize] += 1;
                 }
-                x @ _ => unreachable!("only Int() should be possible: {:?}", x),
+                x => unreachable!("only Int() should be possible: {:?}", x),
             }
         }
         for &count in &counts {
@@ -682,26 +683,23 @@ mod test {
             name: "foo".to_owned(),
         };
 
-        assert_eq!(
-            param.project_into_features::<f64>(ParameterValue::Real(-1.0)),
-            0.0,
+        let feature_min = param.project_into_features(ParameterValue::Real(-1.0));
+        let feature_max = param.project_into_features(ParameterValue::Real(10.0));
+        assert!(
+            approx_eq!(f64, feature_min, 0.0),
             "feature should reach min bound",
         );
-        assert_eq!(
-            param.project_into_features::<f64>(ParameterValue::Real(10.0)),
-            1.0,
+        assert!(
+            approx_eq!(f64, feature_max, 1.0),
             "feature should reach max bound",
         );
 
         for x in -1..=10 {
-            let value = ParameterValue::Real(x as f64);
+            let value = ParameterValue::Real(f64::from(x));
             let feature = param.project_into_features(value);
+            let roundtrip = param.project_from_features(feature);
             assert!(
-                approx_eq!(
-                    f64,
-                    param.project_from_features(feature).into(),
-                    value.into()
-                ),
+                approx_eq!(f64, roundtrip.into(), value.into()),
                 "must roundtrip for x={}",
                 x,
             );
@@ -722,23 +720,23 @@ mod test {
             name: "foo".to_owned(),
         };
 
-        assert_eq!(
-            param.project_into_features::<f64>(ParameterValue::Int(-1)),
-            0.0,
+        let feature_min = param.project_into_features(ParameterValue::Int(-1));
+        let feature_max = param.project_into_features(ParameterValue::Int(10));
+        assert!(
+            approx_eq!(f64, feature_min, 0.0),
             "feature should reach min bound",
         );
-        assert_eq!(
-            param.project_into_features::<f64>(ParameterValue::Int(10)),
-            1.0,
+        assert!(
+            approx_eq!(f64, feature_max, 1.0),
             "feature should reach max bound",
         );
 
         for x in -1..=10 {
             let value = ParameterValue::Int(x);
             let feature = param.project_into_features(value);
-            assert_eq!(
-                Into::<f64>::into(param.project_from_features(feature)),
-                value.into(),
+            let roundtrip = param.project_from_features(feature);
+            assert!(
+                approx_eq!(f64, roundtrip.into(), value.into()),
                 "must roundtrip for x={}",
                 x,
             );

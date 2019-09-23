@@ -62,7 +62,7 @@ fn it_works_on_a_simple_case() {
         ConstantKernel::new(BoundedValue::new(3.0, 0.1, 4.0).unwrap()),
         Matern::new(2.5, vec![BoundedValue::new(1.5, 0.1, 2.0).unwrap()]),
     );
-    const SEED: usize = 938274;
+    const SEED: usize = 938_274;
     const N_RESTARTS_OPTIMIZER: usize = 4;
     let mut rng = crate::RNG::new_with_seed(SEED);
 
