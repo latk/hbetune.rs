@@ -565,9 +565,8 @@ where
             model.predict_mean_transformed(self.space.project_into_features(suggestion).into());
 
         for ind in individuals {
-            let candidate_y = model.predict_mean_transformed(
-                self.space.project_into_features(ind.sample()).into(),
-            );
+            let candidate_y = model
+                .predict_mean_transformed(self.space.project_into_features(ind.sample()).into());
             if candidate_y < suggestion_y {
                 suggestion = ind.sample();
                 suggestion_y = candidate_y;
@@ -591,8 +590,8 @@ where
             (),
         );
 
-        let (suggestion_y, suggestion_std) = model.predict_mean_std_transformed(
-            self.space.project_into_features(suggestion).into());
+        let (suggestion_y, suggestion_std) =
+            model.predict_mean_std_transformed(self.space.project_into_features(suggestion).into());
         (suggestion.to_vec(), suggestion_y, suggestion_std)
     }
 }

@@ -25,12 +25,23 @@ impl<A: ggtune::Scalar> ggtune::ObjectiveFunction<A> for NoisySphereObjective {
     }
 }
 
+struct NoisyAbsObjective {
+    sigma: f64,
+}
+
+impl<A: ggtune::Scalar> ggtune::ObjectiveFunction<A> for NoisyAbsObjective {
+    fn run(&self, xs: &[ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
+        let y: f64 = xs.iter().cloned().map(|x| Into::<f64>::into(x).abs()).sum();
+        (A::from_f(rng.normal(y, self.sigma)), A::from_i(0))
+    }
+}
+
 #[test]
 fn sphere_d2_f64() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        904827189,
+        582347,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -46,7 +57,7 @@ fn sphere_d2_f32() {
     run_minimize_test(
         Types::<f64, EstimatorGPR>::default(),
         ObjectiveFunctionFromFn::new(sphere_objective),
-        1759340364,
+        582347,
         &[array![0.0, 0.0]],
         0.2,
         |space, minimizer, _args| {
@@ -121,6 +132,25 @@ fn sphere_d2_noisy() {
             minimizer.initial = 15;
             space.add_integer_parameter("x1", -7, 9);
             space.add_real_parameter("x2", -3.0, 2.0);
+        },
+    );
+}
+
+#[test]
+fn abs_d2_log_noisy() {
+    run_minimize_test(
+        Types::<f64, EstimatorGPR>::default(),
+        NoisyAbsObjective { sigma: 1.0 },
+        82348,
+        &[array![0.0, 1.0]],
+        0.2,
+        |space, minimizer, _args| {
+            minimizer.max_nevals = 70;
+            minimizer.popsize = 8;
+            minimizer.initial = 15;
+            minimizer.relscale_attenuation = 0.85;
+            space.add_logint_parameter("x1", -10, 1000, Some(11));
+            space.add_logreal_parameter("x1", 1.0, 2000.0, None);
         },
     );
 }

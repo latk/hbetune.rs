@@ -200,6 +200,8 @@ where
 
 /// One-Max function (just the sum of values).
 ///
+/// Because we are doing minimization, this is actually more like an all-zero problem.
+///
 /// Bounds: 0 <= xi <= 1
 ///
 /// Optimum: f(0, ..., 0) = 0

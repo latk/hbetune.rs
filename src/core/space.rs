@@ -57,6 +57,56 @@ impl Space {
         });
     }
 
+    /// Add a log-scale real-valued parameter.
+    /// The bounds `lo`, `hi` are inclusive.
+    /// The parameter `offset` defaults to zero, and must be chosen so that `lo + offset > 0`.
+    /// Panics if the parameter range has zero size or is otherwise invalid.
+    pub fn add_logreal_parameter(
+        &mut self,
+        name: impl Into<String>,
+        lo: f64,
+        hi: f64,
+        offset: Option<f64>,
+    ) {
+        let offset = offset.unwrap_or(0.0);
+        assert!(lo < hi, "logreal parameter: range must not be empty");
+        assert!(
+            lo + offset > 0.0,
+            "logreal parameter: lo + offset must be > 0"
+        );
+        self.add_parameter(Parameter::LogReal {
+            name: name.into(),
+            lo,
+            hi,
+            offset,
+        });
+    }
+
+    /// Add a log-scaled integer parameter.
+    /// The bounds `lo`, `hi` are inclusive.
+    /// The parameter `offset` defaults to zero, and must be chosen so that `lo + offset > 0`.
+    /// Panics if the parameter range is empty or is otherwise invalid.
+    pub fn add_logint_parameter(
+        &mut self,
+        name: impl Into<String>,
+        lo: i64,
+        hi: i64,
+        offset: Option<i64>,
+    ) {
+        let offset = offset.unwrap_or(0);
+        assert!(lo < hi, "logint parameter: range must not be empty");
+        assert!(
+            lo + offset > 0,
+            "logreal parameter: lo + offset must be > 0"
+        );
+        self.add_parameter(Parameter::LogInt {
+            name: name.into(),
+            lo,
+            hi,
+            offset,
+        })
+    }
+
     pub fn add_parameter(&mut self, param: Parameter) {
         self.params.push(param);
     }
@@ -195,6 +245,16 @@ fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
     normal.inverse_cdf(xz) * sigma + mu
 }
 
+fn project_into_range(x: f64, lo: f64, hi: f64) -> f64 {
+    // clip the transformed value to prevent numerical precision problems
+    crate::util::clip((x - lo) / (hi - lo), Some(0.0), Some(1.0))
+}
+
+fn project_from_range(x: f64, lo: f64, hi: f64) -> f64 {
+    // clip the transformed value to prevent numerical precision problems
+    crate::util::clip(x * (hi - lo) + lo, Some(lo), Some(hi))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParameterValue {
     Real(f64),
@@ -233,8 +293,28 @@ impl std::fmt::Display for ParameterValue {
 
 #[derive(Debug, Clone)]
 pub enum Parameter {
-    Real { name: String, lo: f64, hi: f64 },
-    Int { name: String, lo: i64, hi: i64 },
+    Real {
+        name: String,
+        lo: f64,
+        hi: f64,
+    },
+    Int {
+        name: String,
+        lo: i64,
+        hi: i64,
+    },
+    LogReal {
+        name: String,
+        lo: f64,
+        hi: f64,
+        offset: f64,
+    },
+    LogInt {
+        name: String,
+        lo: i64,
+        hi: i64,
+        offset: i64,
+    },
 }
 
 impl Parameter {
@@ -242,13 +322,15 @@ impl Parameter {
         match self {
             Parameter::Real { name, .. } => name,
             Parameter::Int { name, .. } => name,
+            Parameter::LogReal { name, .. } => name,
+            Parameter::LogInt { name, .. } => name,
         }
     }
 
     fn project_into_features<A: Scalar>(&self, x: ParameterValue) -> A {
         match *self {
             Parameter::Real { lo, hi, ref name } => match x {
-                ParameterValue::Real(x) => A::from_f((x - lo) / (hi - lo)),
+                ParameterValue::Real(x) => A::from_f(project_into_range(x, lo, hi)),
                 x @ _ => unreachable!("Real({}): cannot project {:?} into features", name, x),
             },
             Parameter::Int { lo, hi, ref name } => match x {
@@ -258,27 +340,68 @@ impl Parameter {
                 ParameterValue::Int(x) => A::from_f(((x - lo) as f64) / (hi - lo) as f64),
                 x @ _ => unreachable!("Int({}): cannot project {:?} into features", name, x),
             },
+            Parameter::LogReal {
+                lo,
+                hi,
+                offset,
+                ref name,
+            } => match x {
+                ParameterValue::Real(x) => A::from_f(project_into_range(
+                    (x + offset).ln(),
+                    (lo + offset).ln(),
+                    (hi + offset).ln(),
+                )),
+                x @ _ => unreachable!("LogReal({}): cannot project {:?} into features", name, x),
+            },
+            Parameter::LogInt {
+                lo,
+                hi,
+                offset,
+                ref name,
+            } => match x {
+                ParameterValue::Int(x) => {
+                    let logx = ((x + offset) as f64).ln();
+                    let loglo = ((lo + offset) as f64).ln();
+                    let logsize = ((hi + offset) as f64).ln() - loglo;
+                    let feature = (logx - loglo) / logsize;
+                    A::from_f(crate::util::clip(feature, Some(0.0), Some(1.0)))
+                }
+                x @ _ => unreachable!("LogInt({}): cannot project {:?} into features", name, x),
+            },
         }
     }
 
     fn project_from_features<A: Scalar>(&self, x: A) -> ParameterValue {
         match *self {
-            Parameter::Real { lo, hi, .. } => ParameterValue::Real(x.into() * (hi - lo) + lo),
+            Parameter::Real { lo, hi, .. } => {
+                ParameterValue::Real(project_from_range(x.into(), lo, hi))
+            }
             Parameter::Int { lo, hi, .. } => ParameterValue::Int(crate::util::clip(
                 (x.into() * (hi - lo + 1) as f64).floor() as i64 + lo,
                 Some(lo),
                 Some(hi),
             )),
+            Parameter::LogReal { lo, hi, offset, .. } => ParameterValue::Real(
+                project_from_range(x.into(), (lo + offset).ln(), (hi + offset).ln()).exp() - offset,
+            ),
+            Parameter::LogInt { lo, hi, offset, .. } => {
+                let loglo = ((lo + offset) as f64).ln();
+                let logsize = ((hi + offset + 1) as f64).ln() - loglo;
+                let x = (x.into() * logsize + loglo).exp().floor() as i64 - offset;
+                ParameterValue::Int(crate::util::clip(x, Some(lo), Some(hi)))
+            }
         }
     }
 
     fn mutate_inplace(&self, x: &mut ParameterValue, relscale: f64, rng: &mut RNG) {
         match *self {
             Parameter::Real { lo, hi, ref name } => match *x {
-                ParameterValue::Real(ref mut x) => *x = sample_truncnorm(*x, relscale, lo, hi, rng),
+                ParameterValue::Real(ref mut x) => {
+                    *x = sample_truncnorm(*x, relscale * (hi - lo), lo, hi, rng)
+                }
                 x @ _ => unreachable!("Real({}): cannot mutate {:?}", name, x),
             },
-            Parameter::Int { ref name, .. } => match x {
+            Parameter::Int { .. } | Parameter::LogInt { .. } => match x {
                 x @ ParameterValue::Int { .. } => {
                     *x = self.project_from_features(sample_truncnorm(
                         self.project_into_features(*x),
@@ -288,7 +411,19 @@ impl Parameter {
                         rng,
                     ))
                 }
-                x @ _ => unreachable!("Int({}): cannot mutate {:?}", name, *x),
+                x @ _ => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
+            },
+            Parameter::LogReal { .. } => match x {
+                x @ ParameterValue::Real { .. } => {
+                    *x = self.project_from_features(sample_truncnorm(
+                        self.project_into_features(*x),
+                        relscale,
+                        0.0,
+                        1.0,
+                        rng,
+                    ))
+                }
+                x @ _ => unreachable!("{:?}: cannot mutate {:?}", *self, *x),
             },
         }
     }
@@ -300,14 +435,10 @@ impl Parameter {
     /// so that the full parameter space is evenly covered.
     fn sample_n(&self, n: usize, rng: &mut RNG) -> Vec<ParameterValue> {
         let out = match *self {
-            Parameter::Real { lo, hi, .. } => {
-                assert!(lo < hi, "lo {} must be lower than hi {}", lo, hi);
-                sample_n_in_unit_range(n, rng)
-                    .into_iter()
-                    .map(|x| self.project_from_features(x))
-                    .collect_vec()
-            }
-            Parameter::Int { .. } => sample_n_in_unit_range(n, rng)
+            Parameter::Real { .. }
+            | Parameter::Int { .. }
+            | Parameter::LogReal { .. }
+            | Parameter::LogInt { .. } => sample_n_in_unit_range(n, rng)
                 .into_iter()
                 .map(|x| self.project_from_features(x))
                 .collect_vec(),
@@ -336,86 +467,120 @@ fn sample_n_in_unit_range(n: usize, rng: &mut RNG) -> Vec<f64> {
     n_minus_one_items.chain(last_item).collect_vec()
 }
 
+macro_rules! with_error_context {
+    ($err:ident => ($format:literal $(, $arg:expr)*) $body:block) => {
+        (|| -> ::std::result::Result<_, failure::Error> { Ok($body) })()
+            .with_context(|$err| format!($format $(, $arg)*))
+    }
+}
+
 impl std::str::FromStr for Parameter {
     type Err = failure::Error;
 
     fn from_str(s: &str) -> Result<Parameter, Self::Err> {
         use failure::ResultExt as _;
-        let err_too_few_items = || {
-            format_err!(
-                "too few items, expected: '<name> <type> <...>' but got: {}",
-                s
-            )
-        };
-        let err_real_too_few_items = || {
-            format_err!(
-                "too few items, expected: '<name> real <lo> <hi>' but got: {}",
-                s
-            )
-        };
-        let err_real_too_many_items = || {
-            format_err!(
-                "too many items, expected: '<name> real <lo> <hi>' but got: {}",
-                s
-            )
-        };
-        let err_int_too_few_items = || {
-            format_err!(
-                "too few items, expected: '<name> int <lo> <hi>' but got: {}",
-                s,
-            )
-        };
-        let err_int_too_many_items = || {
-            format_err!(
-                "too many items, expected: '<name> int <lo> <hi>' but got: {}",
-                s,
-            )
-        };
+
+        fn no_more_items(mut items: impl Iterator) -> Result<(), failure::Error> {
+            if items.next().is_some() {
+                return Err(format_err!("too many items"));
+            } else {
+                Ok(())
+            }
+        }
+
+        fn parse_next<T, Iter>(
+            symbol: &str,
+            items: &mut Iter,
+        ) -> Result<T, failure::Context<String>>
+        where
+            Iter: Iterator,
+            Iter::Item: AsRef<str>,
+            T: std::str::FromStr,
+            <T as std::str::FromStr>::Err: failure::Fail,
+        {
+            with_error_context!(err => ("while parsing '{}': {}", symbol, err) {
+                items
+                    .next()
+                    .ok_or_else(|| format_err!("value is missing"))?
+                    .as_ref()
+                    .parse()?
+            })
+        }
+
+        fn parse_next_option<T, Iter>(
+            symbol: &str,
+            items: &mut Iter,
+        ) -> Result<Option<T>, failure::Context<String>>
+        where
+            Iter: Iterator,
+            Iter::Item: AsRef<str>,
+            T: std::str::FromStr,
+            <T as std::str::FromStr>::Err: failure::Fail,
+        {
+            with_error_context!(err => ("while parsing '{}': {}", symbol, err) {
+                items
+                    .next()
+                    .map(|s| -> Result<T, _> { s.as_ref().parse() })
+                    .transpose()?
+            })
+        }
 
         let mut items = s.split_whitespace();
-        let name: String = items.next().ok_or_else(err_too_few_items)?.to_owned();
-        let the_type: &str = items.next().ok_or_else(err_too_few_items)?;
-        match the_type {
-            "real" => {
-                let lo = items
-                    .next()
-                    .ok_or_else(err_real_too_few_items)?
-                    .parse::<f64>()
-                    .with_context(|err| format!("while parsing <lo>: {}", err))?;
+        let (name, the_type) = items
+            .next()
+            .and_then(|name| items.next().map(|the_type| (name.to_owned(), the_type)))
+            .ok_or_else(|| {
+                format_err!(
+                    "while parsing '<name> <type> <...>': value is missing (input: {:?})",
+                    s
+                )
+            })?;
 
-                let hi = items
-                    .next()
-                    .ok_or_else(err_real_too_few_items)?
-                    .parse::<f64>()
-                    .with_context(|err| format!("while parsing <hi>: {}", err))?;
+        let result = match the_type {
+            "real" => with_error_context!(
+            err => ("while parsing 'real <lo> <hi>': {}", err) {
+                let lo = parse_next("<lo>", &mut items)?;
+                let hi = parse_next("<hi>", &mut items)?;
+                no_more_items(items)?;
+                Parameter::Real { name, lo, hi }
+            })
+            .map_err(Into::into),
 
-                if items.next().is_some() {
-                    return Err(err_real_too_many_items());
-                }
+            "int" => with_error_context!(
+            err => ("while parsing 'int <lo> <hi>': {}", err) {
+                let lo = parse_next("<lo>", &mut items)?;
+                let hi = parse_next("<hi>", &mut items)?;
+                no_more_items(items)?;
+                Parameter::Int { name, lo, hi }
+            })
+            .map_err(Into::into),
 
-                Ok(Parameter::Real { name, lo, hi })
-            }
-            "int" => {
-                let lo = items
-                    .next()
-                    .ok_or_else(err_int_too_few_items)?
-                    .parse::<i64>()
-                    .with_context(|err| format!("while parsing <lo>: {}", err))?;
+            "logreal" => with_error_context!(
+            err => ("while parsing 'logreal <lo> <hi> [<offset>]': {}", err) {
+                let lo = parse_next("<lo>", &mut items)?;
+                let hi = parse_next("<hi>", &mut items)?;
+                let offset = parse_next_option("<offset>", &mut items)?.unwrap_or(0.0);
+                no_more_items(items)?;
+                Parameter::LogReal{ name, lo, hi, offset }
+            })
+            .map_err(Into::into),
 
-                let hi = items
-                    .next()
-                    .ok_or_else(err_int_too_few_items)?
-                    .parse::<i64>()
-                    .with_context(|err| format!("while parsing <hi>: {}", err))?;
+            "logint" => with_error_context!(
+            err => ("while parsing 'logint <lo> <hi> [<offset>]: {}", err) {
+                let lo = parse_next("<lo>", &mut items)?;
+                let hi = parse_next("<hi>", &mut items)?;
+                let offset = parse_next_option("<offset>", &mut items)?.unwrap_or(0);
+                no_more_items(items)?;
+                Parameter::LogInt { name, lo, hi, offset }
+            })
+            .map_err(Into::into),
 
-                if items.next().is_some() {
-                    return Err(err_int_too_many_items());
-                }
-
-                Ok(Parameter::Int { name, lo, hi })
-            }
-            t => bail!("type must be 'real', was: {}", t),
-        }
+            t => Err(format_err!(
+                "type must be one of real/int/logreal/logint, was: {}",
+                t
+            )),
+        };
+        Ok(result.with_context(|err| format!("{} (input: {:?})", err, s))?)
     }
 }
 
@@ -507,4 +672,82 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn project_logreal() {
+        let param = Parameter::LogReal {
+            lo: -1.0,
+            hi: 10.0,
+            offset: 1.5,
+            name: "foo".to_owned(),
+        };
+
+        assert_eq!(
+            param.project_into_features::<f64>(ParameterValue::Real(-1.0)),
+            0.0,
+            "feature should reach min bound",
+        );
+        assert_eq!(
+            param.project_into_features::<f64>(ParameterValue::Real(10.0)),
+            1.0,
+            "feature should reach max bound",
+        );
+
+        for x in -1..=10 {
+            let value = ParameterValue::Real(x as f64);
+            let feature = param.project_into_features(value);
+            assert!(
+                approx_eq!(
+                    f64,
+                    param.project_from_features(feature).into(),
+                    value.into()
+                ),
+                "must roundtrip for x={}",
+                x,
+            );
+            assert!(
+                0.0 <= feature && feature <= 1.0,
+                "feature {} must stay within bounds [0, 1]",
+                feature,
+            );
+        }
+    }
+
+    #[test]
+    fn project_logint() {
+        let param = Parameter::LogInt {
+            lo: -1,
+            hi: 10,
+            offset: 2,
+            name: "foo".to_owned(),
+        };
+
+        assert_eq!(
+            param.project_into_features::<f64>(ParameterValue::Int(-1)),
+            0.0,
+            "feature should reach min bound",
+        );
+        assert_eq!(
+            param.project_into_features::<f64>(ParameterValue::Int(10)),
+            1.0,
+            "feature should reach max bound",
+        );
+
+        for x in -1..=10 {
+            let value = ParameterValue::Int(x);
+            let feature = param.project_into_features(value);
+            assert_eq!(
+                Into::<f64>::into(param.project_from_features(feature)),
+                value.into(),
+                "must roundtrip for x={}",
+                x,
+            );
+            assert!(
+                0.0 <= feature && feature <= 1.0,
+                "feature {} must stay within bounds [0, 1]",
+                feature,
+            );
+        }
+    }
+
 }
