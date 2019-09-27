@@ -136,6 +136,127 @@ fn abs_d2_log_noisy_integration() {
     });
 }
 
+#[test]
+fn goldstein_price_integration() {
+    run_integration_test(&[array![0.0, -1.0]], 0.05, |command| {
+        command
+            .arg("run")
+            .arg("--seed=19741")
+            .arg("--max-nevals=100")
+            .arg("--initial=30")
+            .arg("--popsize=7")
+            .arg("--param=x1 real -2 2")
+            .arg("--param=x2 real -2 2")
+            .args(&["function", "goldstein-price"]);
+    });
+}
+
+#[test]
+fn goldstein_price_noisy_integration() {
+    run_integration_test(&[array![0.0, -1.0]], 0.1, |command| {
+        command
+            .arg("run")
+            .arg("--seed=32371")
+            .arg("--max-nevals=114")
+            .arg("--initial=30")
+            .arg("--popsize=7")
+            .arg("--param=x1 real -2 2")
+            .arg("--param=x2 real -2 2")
+            .args(&["function", "goldstein-price", "--noise=1.0"]);
+    });
+}
+
+/// The Easom test doesn't really have any chance of heuristically finding the optimum,
+/// so that we put most points into exploration
+/// and allow any recommendation point as “correct” result.
+#[test]
+fn easom_integration() {
+    use std::f64::consts::PI;
+    run_integration_test(&[array![PI, PI]], 500.0, |command| {
+        command
+            .arg("run")
+            .arg("--seed=426")
+            .arg("--max-nevals=100")
+            .arg("--initial=90")
+            .arg("--popsize=5")
+            .arg("--param=x1 real -50 50")
+            .arg("--param=x2 real -50 50")
+            .args(&["function", "easom"]);
+    });
+}
+
+fn himmelblau_ideal() -> [Array1<f64>; 4] {
+    [
+        array![3.0, 2.0],
+        array![-2.805118, 3.131312],
+        array![-3.779310, -3.283186],
+        array![3.584428, -1.848126],
+    ]
+}
+
+#[test]
+fn himmelblau_integration() {
+    run_integration_test(&himmelblau_ideal(), 0.1, |command| {
+        command
+            .arg("run")
+            .arg("--seed=25565")
+            .arg("--max-nevals=70")
+            .arg("--initial=20")
+            .arg("--popsize=8")
+            .arg("--param=x1 real -5 5")
+            .arg("--param=x2 real -5 5")
+            .args(&["function", "himmelblau"]);
+    })
+}
+
+#[test]
+fn rastrigin_d2_integration() {
+    run_integration_test(&[vec![0.0; 2].into()], 0.2, |command| {
+        command
+            .arg("run")
+            .arg("--seed=17418")
+            .arg("--max-nevals=90")
+            .arg("--initial=30")
+            .arg("--popsize=5")
+            .arg("--param=x1 real -5.12 5.12")
+            .arg("--param=x2 real -5.12 5.12")
+            .args(&["function", "rastrigin"]);
+    })
+}
+
+/// Finding the optimum for many dimensions is really difficult…
+#[test]
+fn rastrigin_d5_integration() {
+    run_integration_test(&[vec![0.0; 5].into()], 3.0, |command| {
+        command.arg("run")
+            .arg("--seed=10763")
+            .arg("--max-nevals=110")
+            .arg("--initial=60")
+            .arg("--popsize=5")
+            .arg("--param=x1 real -5.12 5.12")
+            .arg("--param=x2 real -5.12 5.12")
+            .arg("--param=x3 real -5.12 5.12")
+            .arg("--param=x4 real -5.12 5.12")
+            .arg("--param=x5 real -5.12 5.12")
+            .args(&["function", "rastrigin"]);
+    })
+}
+
+#[test]
+fn rosenbrock_d2_integration() {
+    run_integration_test(&[vec![1.0; 2].into()], 0.1, |command| {
+        command
+            .arg("run")
+            .arg("--seed=19748")
+            .arg("--max-nevals=60")
+            .arg("--initial=25")
+            .arg("--popsize=7")
+            .arg("--param=x1 real -2.5 2.5")
+            .arg("--param=x2 real -2.5 2.5")
+            .args(&["function", "rosenbrock"]);
+    })
+}
+
 struct Types<A, Model> {
     marker: std::marker::PhantomData<(A, Model)>,
 }
