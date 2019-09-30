@@ -42,11 +42,8 @@
 use ndarray::prelude::*;
 use ndarray_stats as ndstats;
 use noisy_float;
-use num_traits::Float;
 
-#[cfg(test)]
-use speculate::speculate;
-
+use crate::core::ynormalize::{Projection, YNormalize};
 use crate::gpr::*;
 use crate::util::{BoundedValue, BoundsError};
 use crate::{Estimator, Space, SurrogateModel, RNG};
@@ -61,7 +58,7 @@ pub struct SurrogateModelGPR<A: Scalar> {
     y_train: Array1<A>,
     alpha: Array1<A>,
     k_inv: Array2<A>,
-    y_norm: YNormalization<A>,
+    y_norm: YNormalize<A>,
     lml: f64,
 }
 
@@ -91,7 +88,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             None,
         );
 
-        self.y_norm.y_from_normalized(y)
+        self.y_norm.project_from_normalized(y)
     }
 
     fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
@@ -106,8 +103,8 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         );
 
         (
-            self.y_norm.y_from_normalized(y),
-            self.y_norm.y_std_from_normalized_variance(y_var),
+            self.y_norm.project_from_normalized(y),
+            self.y_norm.project_std_from_normalized_variance(y_var),
         )
     }
 }
@@ -148,7 +145,7 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
-        let (y_train, y_norm) = YNormalization::normalized_from_y(y);
+        let (y_train, y_norm) = YNormalize::project_into_normalized(y, Projection::Linear);
         let x_train = x;
 
         let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
@@ -254,77 +251,6 @@ fn get_kernel_or_default<A: Scalar>(
     let kernel = Product::of(amplitude, main_kernel);
 
     Ok((kernel, noise))
-}
-
-#[derive(Debug, PartialEq, Clone)]
-struct YNormalization<A: Scalar> {
-    amplitude: A,
-    expected: A,
-}
-
-impl<A: Scalar> YNormalization<A> {
-    fn fudge_min() -> A {
-        A::from_f(0.05)
-    }
-
-    fn normalized_from_y(mut y: Array1<A>) -> (Array1<A>, Self) {
-        use ndarray_stats::QuantileExt;
-
-        // shift the values so that all are positive
-        let expected = *y.min().unwrap();
-        y -= expected;
-
-        // scale the values so that the mean is set to 1
-        let amplitude = y.mean_axis(Axis(0)).into_scalar();
-        let amplitude = if amplitude <= A::from_f(0.0) {
-            A::from_f(1.0)
-        } else {
-            amplitude
-        };
-        y /= amplitude;
-
-        // raise the minimum slightly above zero
-        y += Self::fudge_min();
-
-        (
-            y,
-            Self {
-                amplitude,
-                expected,
-            },
-        )
-    }
-
-    fn y_from_normalized(&self, mut y: Array1<A>) -> Array1<A> {
-        y -= Self::fudge_min();
-        y *= self.amplitude;
-        y += self.expected;
-        y
-    }
-
-    fn y_std_from_normalized_variance(&self, y_variance: Array1<A>) -> Array1<A> {
-        y_variance.mapv_into(Float::sqrt) * self.amplitude
-    }
-}
-
-#[cfg(test)]
-speculate! {
-    describe "struct YNormalization" {
-
-        it "has an inverse operation" {
-            let original: Array1<f64> = vec![1., 2., 3., 4.].into();
-            let (y, norm) = YNormalization::normalized_from_y(original.clone());
-            let result = norm.y_from_normalized(y);
-            assert!(original.all_close(&result, 0.0001));
-        }
-
-        it "also works with negative numbers" {
-            let original: Array1<f64> = vec![-5., 3., 8., -2.].into();
-            let (y, norm) = YNormalization::normalized_from_y(original.clone());
-            let result = norm.y_from_normalized(y);
-            assert!(original.all_close(&result, 0.0001));
-        }
-    }
 }
 
 fn estimate_amplitude<A: Scalar>(

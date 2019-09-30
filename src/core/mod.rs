@@ -10,3 +10,4 @@ pub mod outputs;
 pub mod random;
 pub mod space;
 pub mod surrogate_model;
+pub mod ynormalize;
