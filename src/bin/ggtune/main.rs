@@ -16,14 +16,25 @@ mod objective_shell;
 
 #[derive(Debug, StructOpt)]
 struct CliApp {
+    /// enable verbose output
+    #[structopt(long)]
+    verbose: bool,
+
     #[structopt(subcommand)]
     command: CliCommand,
 }
 
 #[derive(Debug, StructOpt)]
 enum CliCommand {
+    /// Run the ggtune minimizer.
     #[structopt(name = "run")]
     Run(CliCommandRun),
+
+    /// Evaluate a benchmark function.
+    ///
+    /// This is intended for integration with external tools.
+    #[structopt(name = "function")]
+    Function(CliCommandFunction),
 }
 
 #[derive(Debug, StructOpt)]
@@ -41,6 +52,19 @@ struct CliCommandRun {
 
     #[structopt(subcommand)]
     objective: CliObjective,
+}
+
+#[derive(Debug, StructOpt)]
+struct CliCommandFunction {
+    /// Random number generator seed for reproducible runs.
+    #[structopt(long, default_value = "7861")]
+    seed: usize,
+
+    #[structopt(flatten)]
+    function: CliBenchFunction,
+
+    /// Sample at which the function shall be evaluated.
+    args: Vec<f64>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -147,9 +171,12 @@ impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
 
 fn main() {
     let args = CliApp::from_args();
-    println!("args: {:#?}", args);
+    if args.verbose {
+        println!("args: {:#?}", args);
+    }
     match args.command {
         CliCommand::Run(run) => command_run(run),
+        CliCommand::Function(function) => command_function(function),
     }
 }
 
@@ -209,4 +236,15 @@ fn command_run(cfg: CliCommandRun) {
             "std": suggestion_std,
         })
     );
+}
+
+fn command_function(function: CliCommandFunction) {
+    let CliCommandFunction { seed, function, args } = function;
+
+    let sample = args.into_iter().map(Into::into).collect_vec();
+    let mut rng = ggtune::RNG::new_with_seed(seed);
+
+    let (value, _cost) = ggtune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
+
+    println!("{}", value);
 }
