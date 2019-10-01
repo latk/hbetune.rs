@@ -32,7 +32,7 @@ impl SimpleModel {
 
     fn uncertainty(&self, x: f64) -> f64 {
         let x = self.space.project_into_features(&[x.into()]);
-        self.model.predict_mean_std(x.into()).1
+        self.model.predict_statistics(x.into()).std()
     }
 }
 
@@ -187,15 +187,19 @@ speculate! {
             let check_predictions = |xs: &Array2<f64>| {
                 let expected_ys: Array1<_> = xs.outer_iter().map(sphere).collect();
 
-                let (predicted_ys, predicted_std) = model.predict_mean_std_a(xs.clone());
+                let (predicted_ys, predicted_std): (Vec<f64>, Vec<f64>) =
+                    xs.outer_iter()
+                    .map(|x| {
+                        let stats = model.predict_statistics(x.to_owned());
+                        (stats.mean(), stats.std())
+                    })
+                    .unzip();
 
                 let is_ok = izip!(expected_ys.outer_iter(),
-                                  predicted_ys.outer_iter(),
-                                  predicted_std.outer_iter())
-                    .all(|(expected, y, std)| {
+                                  predicted_ys.iter(),
+                                  predicted_std.iter())
+                    .all(|(expected, &y, &std)| {
                         let expected = expected.to_owned().into_scalar();
-                        let y = y.to_owned().into_scalar();
-                        let std = std.to_owned().into_scalar();
                         expected - 0.6 * std < y && y < expected + std
                     });
 
@@ -203,7 +207,7 @@ speculate! {
                                 *   expected ys: {}\n\
                                 *  predicted ys: {}\n\
                                 * predicted std: {}\n",
-                        expected_ys, predicted_ys, predicted_std);
+                        expected_ys, Array1::from(predicted_ys), Array1::from(predicted_std));
             };
 
             check_predictions(&xs);
@@ -359,8 +363,14 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     };
 
     let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
-    let (predicted_ys, predicted_std) =
-        model.predict_mean_std_a(xs_test_features.clone());
+    let (predicted_ys, predicted_std): (Vec<_>, Vec<_>) =
+        xs_test_features.outer_iter().map(|x| {
+            let stats = model.predict_statistics(x.to_owned());
+            (stats.mean(), stats.std())
+        })
+        .unzip();
+    let predicted_ys = Array1::from(predicted_ys);
+    let predicted_std = Array1::from(predicted_std);
 
     let error = (&predicted_ys - &expected_ys)
         .mapv_into(|error| error.powi(2))

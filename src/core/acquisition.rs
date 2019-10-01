@@ -51,20 +51,15 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                 .take(self.breadth)
                 .collect_vec();
 
-                let (candidate_mean, candidate_std): (Vec<A>, Vec<A>) = candidate_samples
+                let (candidate_mean, candidate_ei): (Vec<A>, Vec<A>) = candidate_samples
                     .iter()
                     .map(|candidate| {
-                        model.predict_mean_std(
+                        model.predict_mean_ei(
                             space.project_into_features(candidate).into(),
+                            fmin,
                         )
                     })
                     .unzip();
-
-                let candidate_ei: Vec<f64> = candidate_mean
-                    .iter()
-                    .zip_eq(&candidate_std)
-                    .map(|(&mean, &std)| expected_improvement(mean.into(), std.into(), fmin.into()))
-                    .collect();
 
                 let i: usize = (0..candidate_ei.len())
                     .max_by(|&a, &b| {

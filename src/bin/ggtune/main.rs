@@ -211,29 +211,35 @@ fn command_run(cfg: CliCommandRun) {
         .minimize(objective.as_ref(), space.clone(), &mut rng, args)
         .expect("minimization should proceed successfully");
 
-    let suggestion = result.suggestion();
-    let (suggestion_y, suggestion_std) = result.suggestion_y_std();
+    let suggestion_location = space
+        .params()
+        .iter()
+        .zip_eq(result.suggestion_location())
+        .map(|(param, value)| json!({
+            "name": param.name(),
+            "type": match value {
+                ggtune::ParameterValue::Real(_) => "real",
+                ggtune::ParameterValue::Int(_) => "int",
+            },
+            "value": match value {
+                ggtune::ParameterValue::Real(x) => json!(x),
+                ggtune::ParameterValue::Int(x) => json!(x),
+            },
+        }))
+        .collect_vec();
+    let suggestion_statistics = result.suggestion_statistics();
 
     println!(
         "optimization result: {:#}",
         json!({
-            "location": space.params()
-                .iter()
-                .zip_eq(suggestion)
-                .map(|(param, value)| json!({
-                    "name": param.name(),
-                    "type": match value {
-                        ggtune::ParameterValue::Real(_) => "real",
-                        ggtune::ParameterValue::Int(_) => "int",
-                    },
-                    "value": match value {
-                        ggtune::ParameterValue::Real(x) => json!(x),
-                        ggtune::ParameterValue::Int(x) => json!(x),
-                    },
-                }))
-                .collect_vec(),
-            "mean": suggestion_y,
-            "std": suggestion_std,
+            "location": suggestion_location,
+            "mean": suggestion_statistics.mean(),
+            "std": suggestion_statistics.std(),
+            "median": suggestion_statistics.median(),
+            "cv": suggestion_statistics.cv(),
+            "iqr": suggestion_statistics.iqr(),
+            "q1": suggestion_statistics.q13().0,
+            "q3": suggestion_statistics.q13().1,
         })
     );
 }

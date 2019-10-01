@@ -1,6 +1,7 @@
 use crate::{AcquisitionStrategy, MutationAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
 use crate::{Individual, Output, OutputEventHandler as _, ParameterValue, Scalar, Space, RNG};
+use crate::core::surrogate_model::SummaryStatistics;
 
 use std::iter::FromIterator as _;
 use std::time::{Duration, Instant};
@@ -37,9 +38,8 @@ pub struct OptimizationResult<A, Model> {
     all_individuals: Vec<Individual<A>>,
     all_models: Vec<Model>,
     duration: Duration,
-    suggestion: Vec<ParameterValue>,
-    suggestion_y: A,
-    suggestion_std: A,
+    suggestion_location: Vec<ParameterValue>,
+    suggestion_statistics: SummaryStatistics<A>,
 }
 
 impl<A, Model> OptimizationResult<A, Model> {
@@ -58,17 +58,14 @@ impl<A, Model> OptimizationResult<A, Model> {
         self.duration
     }
 
-    /// Suggested location of the minimum.
-    pub fn suggestion(&self) -> &[ParameterValue] {
-        self.suggestion.as_slice()
+    /// Location about the suggested location of the minimum.
+    pub fn suggestion_location(&self) -> &[ParameterValue] {
+        self.suggestion_location.as_slice()
     }
 
-    /// Predicted value and uncertainty at the minimum.
-    pub fn suggestion_y_std(&self) -> (A, A)
-    where
-        A: Copy,
-    {
-        (self.suggestion_y, self.suggestion_std)
+    /// Information about the suggested location of the minimum.
+    pub fn suggestion_statistics(&self) -> &SummaryStatistics<A> {
+        &self.suggestion_statistics
     }
 
     /// Final model.
@@ -395,16 +392,15 @@ where
             fmin = find_fmin(all_evalutions.as_slice(), model).expect("fmin could be found");
         }
 
-        let (suggestion, suggestion_y, suggestion_std) =
+        let (suggestion_location, suggestion_statistics) =
             self.suggest_optimum(all_models.last().unwrap(), all_evalutions.as_slice());
 
         Ok(OptimizationResult {
             all_individuals: all_evalutions,
             all_models,
             duration: total_duration.elapsed(),
-            suggestion,
-            suggestion_y,
-            suggestion_std,
+            suggestion_location,
+            suggestion_statistics,
         })
     }
 
@@ -555,7 +551,7 @@ where
         &'a self,
         model: &'a Estimator::Model,
         individuals: impl IntoIterator<Item = &'a Individual<A>>,
-    ) -> (Vec<ParameterValue>, A, A) {
+    ) -> (Vec<ParameterValue>, SummaryStatistics<A>) {
         let mut individuals = individuals.into_iter();
         let mut suggestion = individuals
             .next()
@@ -575,7 +571,7 @@ where
 
         // We now have the minimum evaluated point.
         // Use that as a starting point for minimization of the response surface.
-        let mut suggestion_features = self.space.project_into_features(suggestion);
+        let mut suggestion_features: Vec<f64> = self.space.project_into_features(suggestion);
         crate::util::minimize_without_gradient(
             |x, maybe_grad, _data| {
                 assert!(maybe_grad.is_none(), "cannot provide gradients");
@@ -588,9 +584,11 @@ where
             (),
         );
 
-        let (suggestion_y, suggestion_std) =
-            model.predict_mean_std(self.space.project_into_features(suggestion).into());
-        (suggestion.to_vec(), suggestion_y, suggestion_std)
+        let suggestion = self.space.project_from_features(suggestion_features.clone());
+        let suggestion_statistics = model.predict_statistics(
+            Array1::from(suggestion_features).mapv(A::from_f)
+        );
+        (suggestion, suggestion_statistics)
     }
 }
 

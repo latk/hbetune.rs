@@ -346,10 +346,12 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
         .minimize(&objective, space, &mut rng, args)
         .expect("minimization should proceed successfully");
 
-    let (value, value_std) = result.suggestion_y_std();
+    let stats = result.suggestion_statistics();
+    let value = stats.mean();
+    let value_std = stats.std();
 
     let guess: Array1<f64> = result
-        .suggestion()
+        .suggestion_location()
         .iter()
         .cloned()
         .map(Into::into)

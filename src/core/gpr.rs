@@ -88,10 +88,45 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             None,
         );
 
-        self.y_norm.project_from_normalized(y)
+        self.y_norm.project_location_from_normalized(y)
     }
 
-    fn predict_mean_std_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
+    fn predict_statistics(&self, x: Array1<A>) -> crate::core::surrogate_model::SummaryStatistics<A> {
+        use crate::core::surrogate_model::SummaryStatistics;
+        use statrs::distribution::InverseCDF as _;
+
+        let mut vnorm = Array1::zeros(1);
+        let mnorm = predict(
+            &self.kernel,
+            self.alpha.view(),
+            x.view().insert_axis(Axis(0)),
+            self.x_train.view(),
+            self.k_inv.view(),
+            Some(vnorm.view_mut()),
+        );
+
+        let distnorm = statrs::distribution::Normal::new(
+            (*mnorm.first().unwrap()).into(),
+            (vnorm.first().unwrap().sqrt()).into(),
+        ).unwrap();
+
+        let mean = *self.y_norm.project_mean_from_normalized(mnorm.clone(), vnorm.view()).first().unwrap();
+        let std = *self.y_norm.project_std_from_normalized(mnorm.view(), vnorm.clone()).first().unwrap();
+        let cv = *self.y_norm.project_cv_from_normalized(mnorm.view(), vnorm).first().unwrap();
+
+        let q123norm = array![0.25, 0.5, 0.75].mapv(|x| A::from_f(distnorm.inverse_cdf(x)));
+        let q123 = self.y_norm.project_location_from_normalized(q123norm);
+        let quartiles = match q123.to_vec().as_slice() {
+            [q1, q2, q3] => [*q1, *q2, *q3],
+            _ => unreachable!(),
+        };
+
+        SummaryStatistics::new_mean_std_cv_quartiles(mean, std, cv, quartiles)
+    }
+
+    fn predict_mean_ei_a(&self, x: Array2<A>, fmin: A) -> (Array1<A>, Array1<A>) {
+        use crate::core::acquisition::expected_improvement;
+
         let mut y_var = Array1::zeros(x.rows());
         let y = predict(
             &self.kernel,
@@ -102,10 +137,22 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             Some(y_var.view_mut()),
         );
 
-        (
-            self.y_norm.project_from_normalized(y),
-            self.y_norm.project_std_from_normalized_variance(y_var),
-        )
+        let fmin = *self.y_norm.project_into_normalized(array![fmin]).first().unwrap();
+
+        let mut ei: Array1<A> = Array1::zeros(x.rows());
+        ndarray::Zip::from(&mut ei)
+            .and(&y)
+            .and(&y_var)
+            .apply(|ei, &y, &var| {
+                *ei = A::from_f(expected_improvement(
+                    y.into(),
+                    var.sqrt().into(),
+                    fmin.into(),
+                ))
+            });
+
+        let y = self.y_norm.project_location_from_normalized(y);
+        (y, ei)
     }
 }
 
@@ -145,7 +192,7 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
-        let (y_train, y_norm) = YNormalize::project_into_normalized(y, Projection::Linear);
+        let (y_train, y_norm) = YNormalize::new_project_into_normalized(y, Projection::Linear);
         let x_train = x;
 
         let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
