@@ -27,12 +27,12 @@ impl std::fmt::Debug for SimpleModel {
 impl SimpleModel {
     fn predict(&self, x: f64) -> f64 {
         let x = self.space.project_into_features(&[x.into()]);
-        self.model.predict_mean_transformed(x.into())
+        self.model.predict_mean(x.into())
     }
 
     fn uncertainty(&self, x: f64) -> f64 {
         let x = self.space.project_into_features(&[x.into()]);
-        self.model.predict_mean_std_transformed(x.into()).1
+        self.model.predict_mean_std(x.into()).1
     }
 }
 
@@ -187,7 +187,7 @@ speculate! {
             let check_predictions = |xs: &Array2<f64>| {
                 let expected_ys: Array1<_> = xs.outer_iter().map(sphere).collect();
 
-                let (predicted_ys, predicted_std) = model.predict_mean_std_transformed_a(xs.clone());
+                let (predicted_ys, predicted_std) = model.predict_mean_std_a(xs.clone());
 
                 let is_ok = izip!(expected_ys.outer_iter(),
                                   predicted_ys.outer_iter(),
@@ -360,7 +360,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
 
     let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
     let (predicted_ys, predicted_std) =
-        model.predict_mean_std_transformed_a(xs_test_features.clone());
+        model.predict_mean_std_a(xs_test_features.clone());
 
     let error = (&predicted_ys - &expected_ys)
         .mapv_into(|error| error.powi(2))

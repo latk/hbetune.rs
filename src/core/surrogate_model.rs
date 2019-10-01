@@ -30,16 +30,16 @@ pub trait SurrogateModel<A: Scalar> {
     /// If no length scale information is available, returns None.
     fn length_scales(&self) -> Vec<f64>;
 
-    fn predict_mean_transformed(&self, x: Array1<A>) -> A {
-        let mean = self.predict_mean_transformed_a(x.insert_axis(Axis(0)));
+    fn predict_mean(&self, x: Array1<A>) -> A {
+        let mean = self.predict_mean_a(x.insert_axis(Axis(0)));
         *mean.first().unwrap()
     }
 
-    fn predict_mean_std_transformed(&self, x: Array1<A>) -> (A, A) {
-        let (mean, std) = self.predict_mean_std_transformed_a(x.insert_axis(Axis(0)));
+    fn predict_mean_std(&self, x: Array1<A>) -> (A, A) {
+        let (mean, std) = self.predict_mean_std_a(x.insert_axis(Axis(0)));
         (*mean.first().unwrap(), *std.first().unwrap())
     }
 
-    fn predict_mean_transformed_a(&self, x: Array2<A>) -> Array1<A>;
-    fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>);
+    fn predict_mean_a(&self, x: Array2<A>) -> Array1<A>;
+    fn predict_mean_std_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>);
 }

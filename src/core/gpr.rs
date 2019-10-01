@@ -78,7 +78,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             .collect()
     }
 
-    fn predict_mean_transformed_a(&self, x: Array2<A>) -> Array1<A> {
+    fn predict_mean_a(&self, x: Array2<A>) -> Array1<A> {
         let y = predict(
             &self.kernel,
             self.alpha.view(),
@@ -91,7 +91,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         self.y_norm.project_from_normalized(y)
     }
 
-    fn predict_mean_std_transformed_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
+    fn predict_mean_std_a(&self, x: Array2<A>) -> (Array1<A>, Array1<A>) {
         let mut y_var = Array1::zeros(x.rows());
         let y = predict(
             &self.kernel,

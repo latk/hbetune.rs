@@ -54,7 +54,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                 let (candidate_mean, candidate_std): (Vec<A>, Vec<A>) = candidate_samples
                     .iter()
                     .map(|candidate| {
-                        model.predict_mean_std_transformed(
+                        model.predict_mean_std(
                             space.project_into_features(candidate).into(),
                         )
                     })
