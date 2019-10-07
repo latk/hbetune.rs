@@ -91,7 +91,10 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         self.y_norm.project_location_from_normalized(y)
     }
 
-    fn predict_statistics(&self, x: Array1<A>) -> crate::core::surrogate_model::SummaryStatistics<A> {
+    fn predict_statistics(
+        &self,
+        x: Array1<A>,
+    ) -> crate::core::surrogate_model::SummaryStatistics<A> {
         use crate::core::surrogate_model::SummaryStatistics;
         use statrs::distribution::InverseCDF as _;
 
@@ -108,11 +111,24 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         let distnorm = statrs::distribution::Normal::new(
             (*mnorm.first().unwrap()).into(),
             (vnorm.first().unwrap().sqrt()).into(),
-        ).unwrap();
+        )
+        .unwrap();
 
-        let mean = *self.y_norm.project_mean_from_normalized(mnorm.clone(), vnorm.view()).first().unwrap();
-        let std = *self.y_norm.project_std_from_normalized(mnorm.view(), vnorm.clone()).first().unwrap();
-        let cv = *self.y_norm.project_cv_from_normalized(mnorm.view(), vnorm).first().unwrap();
+        let mean = *self
+            .y_norm
+            .project_mean_from_normalized(mnorm.clone(), vnorm.view())
+            .first()
+            .unwrap();
+        let std = *self
+            .y_norm
+            .project_std_from_normalized(mnorm.view(), vnorm.clone())
+            .first()
+            .unwrap();
+        let cv = *self
+            .y_norm
+            .project_cv_from_normalized(mnorm.view(), vnorm)
+            .first()
+            .unwrap();
 
         let q123norm = array![0.25, 0.5, 0.75].mapv(|x| A::from_f(distnorm.inverse_cdf(x)));
         let q123 = self.y_norm.project_location_from_normalized(q123norm);
@@ -137,7 +153,11 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             Some(y_var.view_mut()),
         );
 
-        let fmin = *self.y_norm.project_into_normalized(array![fmin]).first().unwrap();
+        let fmin = *self
+            .y_norm
+            .project_into_normalized(array![fmin])
+            .first()
+            .unwrap();
 
         let mut ei: Array1<A> = Array1::zeros(x.rows());
         ndarray::Zip::from(&mut ei)

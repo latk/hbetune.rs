@@ -244,7 +244,8 @@ fn rastrigin_d2_integration() {
 #[test]
 fn rastrigin_d5_integration() {
     run_integration_test(&[vec![0.0; 5].into()], 3.0, |command| {
-        command.arg("run")
+        command
+            .arg("run")
             .arg("--seed=10763")
             .arg("--max-nevals=110")
             .arg("--initial=60")

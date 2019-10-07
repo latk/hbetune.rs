@@ -36,5 +36,5 @@ pub use crate::core::outputs::{DurationCounter, Output, OutputEventHandler};
 pub use crate::core::random::RNG;
 pub use crate::core::space::{Parameter, ParameterValue, Space};
 pub use crate::core::surrogate_model::{Estimator, SurrogateModel};
-pub use crate::gpr::Scalar;
 pub use crate::core::ynormalize::Projection;
+pub use crate::gpr::Scalar;

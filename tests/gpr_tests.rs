@@ -363,8 +363,9 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     };
 
     let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
-    let (predicted_ys, predicted_std): (Vec<_>, Vec<_>) =
-        xs_test_features.outer_iter().map(|x| {
+    let (predicted_ys, predicted_std): (Vec<_>, Vec<_>) = xs_test_features
+        .outer_iter()
+        .map(|x| {
             let stats = model.predict_statistics(x.to_owned());
             (stats.mean(), stats.std())
         })

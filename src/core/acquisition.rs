@@ -54,10 +54,7 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                 let (candidate_mean, candidate_ei): (Vec<A>, Vec<A>) = candidate_samples
                     .iter()
                     .map(|candidate| {
-                        model.predict_mean_ei(
-                            space.project_into_features(candidate).into(),
-                            fmin,
-                        )
+                        model.predict_mean_ei(space.project_into_features(candidate).into(), fmin)
                     })
                     .unzip();
 

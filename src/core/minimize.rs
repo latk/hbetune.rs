@@ -1,7 +1,7 @@
+use crate::core::surrogate_model::SummaryStatistics;
 use crate::{AcquisitionStrategy, MutationAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
 use crate::{Individual, Output, OutputEventHandler as _, ParameterValue, Scalar, Space, RNG};
-use crate::core::surrogate_model::SummaryStatistics;
 
 use std::iter::FromIterator as _;
 use std::time::{Duration, Instant};
@@ -561,8 +561,8 @@ where
             model.predict_mean(self.space.project_into_features(suggestion).into());
 
         for ind in individuals {
-            let candidate_y = model
-                .predict_mean(self.space.project_into_features(ind.sample()).into());
+            let candidate_y =
+                model.predict_mean(self.space.project_into_features(ind.sample()).into());
             if candidate_y < suggestion_y {
                 suggestion = ind.sample();
                 suggestion_y = candidate_y;
@@ -584,10 +584,11 @@ where
             (),
         );
 
-        let suggestion = self.space.project_from_features(suggestion_features.clone());
-        let suggestion_statistics = model.predict_statistics(
-            Array1::from(suggestion_features).mapv(A::from_f)
-        );
+        let suggestion = self
+            .space
+            .project_from_features(suggestion_features.clone());
+        let suggestion_statistics =
+            model.predict_statistics(Array1::from(suggestion_features).mapv(A::from_f));
         (suggestion, suggestion_statistics)
     }
 }
@@ -602,9 +603,9 @@ impl<'life, A> FitnessOperator<'life, A> {
     {
         let &FitnessOperator(ref model, ref space, fitness_via) = self;
         match fitness_via {
-            FitnessVia::Prediction => Some(model.predict_mean(
-                space.project_into_features(ind.sample()).to_vec().into(),
-            )),
+            FitnessVia::Prediction => {
+                Some(model.predict_mean(space.project_into_features(ind.sample()).to_vec().into()))
+            }
             FitnessVia::Observation => ind.observation(),
         }
     }

@@ -193,7 +193,9 @@ where
     }
 
     let (xs, xnexts) = (slice(&xs, ..-1), slice(&xs, 1..));
-    ((xnexts.to_owned() - xs.mapv(|x| x.powi(2))).mapv(|x| x.powi(2)).mapv(|x| 100.into() * x)
+    ((xnexts.to_owned() - xs.mapv(|x| x.powi(2)))
+        .mapv(|x| x.powi(2))
+        .mapv(|x| 100.into() * x)
         + xs.mapv(|x| (1.into() - x).powi(2)))
     .sum()
 }

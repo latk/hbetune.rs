@@ -67,33 +67,58 @@ impl<A> SummaryStatistics<A> {
         mean: A,
         std: A,
         cv: A,
-        quartiles: [A; 3]
+        quartiles: [A; 3],
     ) -> SummaryStatistics<A> {
         let [q1, q2, q3] = quartiles;
-        SummaryStatistics { mean, std, cv, q1, q2, q3 }
+        SummaryStatistics {
+            mean,
+            std,
+            cv,
+            q1,
+            q2,
+            q3,
+        }
     }
 
-    pub fn mean(&self) -> A where A: Clone {
+    pub fn mean(&self) -> A
+    where
+        A: Clone,
+    {
         self.mean.clone()
     }
 
-    pub fn std(&self) -> A where A: Clone {
+    pub fn std(&self) -> A
+    where
+        A: Clone,
+    {
         self.std.clone()
     }
 
-    pub fn cv(&self) -> A where A: Clone {
+    pub fn cv(&self) -> A
+    where
+        A: Clone,
+    {
         self.cv.clone()
     }
 
-    pub fn q13(&self) -> (A, A) where A: Clone {
+    pub fn q13(&self) -> (A, A)
+    where
+        A: Clone,
+    {
         (self.q1.clone(), self.q3.clone())
     }
 
-    pub fn median(&self) -> A where A: Clone {
+    pub fn median(&self) -> A
+    where
+        A: Clone,
+    {
         self.q2.clone()
     }
 
-    pub fn iqr(&self) -> A where A: std::ops::Sub<Output = A> + Clone {
+    pub fn iqr(&self) -> A
+    where
+        A: std::ops::Sub<Output = A> + Clone,
+    {
         self.q3.clone() - self.q1.clone()
     }
 }
