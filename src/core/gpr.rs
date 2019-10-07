@@ -166,12 +166,14 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
         let n_restarts_optimizer = 2;
         let matern_nu = 5. / 2.;
         let amplitude_bounds = None;
+        let y_projection = Projection::Linear;
         EstimatorGPR {
             noise_bounds,
             length_scale_bounds,
             n_restarts_optimizer,
             matern_nu,
             amplitude_bounds,
+            y_projection,
         }
     }
 
@@ -192,7 +194,7 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
 
         let n_restarts_optimizer = self.n_restarts_optimizer;
 
-        let (y_train, y_norm) = YNormalize::new_project_into_normalized(y, Projection::Linear);
+        let (y_train, y_norm) = YNormalize::new_project_into_normalized(y, self.y_projection);
         let x_train = x;
 
         let amplitude = estimate_amplitude(y_train.view(), self.amplitude_bounds);
@@ -234,6 +236,7 @@ pub struct EstimatorGPR {
     n_restarts_optimizer: usize,
     matern_nu: f64,
     amplitude_bounds: Option<(f64, f64)>,
+    y_projection: Projection,
 }
 
 impl EstimatorGPR {
@@ -268,6 +271,13 @@ impl EstimatorGPR {
     pub fn amplitude_bounds(self, bounds: Option<(f64, f64)>) -> Self {
         EstimatorGPR {
             amplitude_bounds: bounds,
+            ..self
+        }
+    }
+
+    pub fn y_projection(self, y_projection: Projection) -> Self {
+        Self {
+            y_projection,
             ..self
         }
     }

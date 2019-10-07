@@ -37,3 +37,4 @@ pub use crate::core::random::RNG;
 pub use crate::core::space::{Parameter, ParameterValue, Space};
 pub use crate::core::surrogate_model::{Estimator, SurrogateModel};
 pub use crate::gpr::Scalar;
+pub use crate::core::ynormalize::Projection;

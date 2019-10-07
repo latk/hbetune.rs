@@ -50,6 +50,10 @@ struct CliCommandRun {
     #[structopt(flatten)]
     minimizer: ggtune::Minimizer,
 
+    /// How the objective value should be transformed (lin/linear or log/ln/logarithmic).
+    #[structopt(long, default_value = "linear")]
+    transform_objective: ggtune::Projection,
+
     #[structopt(subcommand)]
     objective: CliObjective,
 }
@@ -181,12 +185,14 @@ fn main() {
 }
 
 fn command_run(cfg: CliCommandRun) {
-    use ggtune::{EstimatorGPR, MinimizerArgs, ObjectiveFunction};
+    use ggtune::{Estimator, EstimatorGPR, MinimizerArgs, ObjectiveFunction};
+
     let CliCommandRun {
         param: params,
         seed,
         minimizer,
         objective,
+        transform_objective,
     } = cfg;
 
     assert!(
@@ -206,6 +212,8 @@ fn command_run(cfg: CliCommandRun) {
     let mut args = MinimizerArgs::<f64, EstimatorGPR>::default();
     args.output
         .add_human_readable_individuals(std::io::stdout(), &space);
+    args.estimator =
+        Some(<EstimatorGPR as Estimator<f64>>::new(&space).y_projection(transform_objective));
 
     let result = minimizer
         .minimize(objective.as_ref(), space.clone(), &mut rng, args)
@@ -215,17 +223,19 @@ fn command_run(cfg: CliCommandRun) {
         .params()
         .iter()
         .zip_eq(result.suggestion_location())
-        .map(|(param, value)| json!({
-            "name": param.name(),
-            "type": match value {
-                ggtune::ParameterValue::Real(_) => "real",
-                ggtune::ParameterValue::Int(_) => "int",
-            },
-            "value": match value {
-                ggtune::ParameterValue::Real(x) => json!(x),
-                ggtune::ParameterValue::Int(x) => json!(x),
-            },
-        }))
+        .map(|(param, value)| {
+            json!({
+                "name": param.name(),
+                "type": match value {
+                    ggtune::ParameterValue::Real(_) => "real",
+                    ggtune::ParameterValue::Int(_) => "int",
+                },
+                "value": match value {
+                    ggtune::ParameterValue::Real(x) => json!(x),
+                    ggtune::ParameterValue::Int(x) => json!(x),
+                },
+            })
+        })
         .collect_vec();
     let suggestion_statistics = result.suggestion_statistics();
 
@@ -245,7 +255,11 @@ fn command_run(cfg: CliCommandRun) {
 }
 
 fn command_function(function: CliCommandFunction) {
-    let CliCommandFunction { seed, function, args } = function;
+    let CliCommandFunction {
+        seed,
+        function,
+        args,
+    } = function;
 
     let sample = args.into_iter().map(Into::into).collect_vec();
     let mut rng = ggtune::RNG::new_with_seed(seed);

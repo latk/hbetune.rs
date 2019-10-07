@@ -495,3 +495,19 @@ mod tests {
         test_statistics(Projection::Logarithmic, 0.01, 0.1);
     }
 }
+
+impl std::str::FromStr for Projection {
+    type Err = failure::Error;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        Ok(match input {
+            "lin" | "linear" => Projection::Linear,
+            "log" | "ln" | "logarithmic" => Projection::Logarithmic,
+            _ => {
+                return Err(format_err!(
+                    "unknown name for Projection, must be {{lin, linear, log, ln, logarithmic}}"
+                ))
+            }
+        })
+    }
+}
