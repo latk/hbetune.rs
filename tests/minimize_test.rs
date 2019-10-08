@@ -103,7 +103,7 @@ fn sphere_d2_mixed_int_float() {
 
 #[test]
 fn sphere_d2_noisy_integration() {
-    run_integration_test(&[array![0.0, 0.0]], 0.2, |command| {
+    run_integration_test(&[array![0.0, 0.0]], 0.2, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=2956349")
@@ -120,7 +120,7 @@ fn sphere_d2_noisy_integration() {
 
 #[test]
 fn abs_d2_log_noisy_integration() {
-    run_integration_test(&[array![0.0, 1.0]], 0.2, |command| {
+    run_integration_test(&[array![0.0, 1.0]], 0.2, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=82348")
@@ -136,9 +136,16 @@ fn abs_d2_log_noisy_integration() {
     });
 }
 
+/// Test optimization on the Goldstein-Price function.
+///
+/// This is a difficult problem because the objective range is quite large
+/// – up to ~1 million in one corner.
+/// Using a linear objective leads to an extremely large uncertainty estimate,
+/// and a bad estimate for the optimizer location.
+/// The logarithmic variants work better.
 #[test]
 fn goldstein_price_integration() {
-    run_integration_test(&[array![0.0, -1.0]], 0.05, |command| {
+    run_integration_test(&[array![0.0, -1.0]], 0.2, 3.0, |command| {
         command
             .arg("run")
             .arg("--seed=19741")
@@ -152,14 +159,16 @@ fn goldstein_price_integration() {
 }
 
 #[test]
-fn goldstein_price_noisy_integration() {
-    run_integration_test(&[array![0.0, -1.0]], 0.1, |command| {
+fn goldstein_price_logy_noisy_integration() {
+    run_integration_test(&[array![0.0, -1.0]], 0.05, 3.0, |command| {
         command
             .arg("run")
             .arg("--seed=32371")
-            .arg("--max-nevals=114")
+            // .arg("--max-nevals=114")
+            .arg("--max-nevals=100")
             .arg("--initial=30")
             .arg("--popsize=7")
+            .arg("--transform-objective=log")
             .arg("--param=x1 real -2 2")
             .arg("--param=x2 real -2 2")
             .args(&["function", "goldstein-price", "--noise=1.0"]);
@@ -167,8 +176,8 @@ fn goldstein_price_noisy_integration() {
 }
 
 #[test]
-fn goldstein_price_logy() {
-    run_integration_test(&[array![0.0, -1.0]], 0.05, |command| {
+fn goldstein_price_logy_integration() {
+    run_integration_test(&[array![0.0, -1.0]], 0.02, 3.0, |command| {
         command
             .arg("run")
             .arg("--seed=2029")
@@ -188,7 +197,7 @@ fn goldstein_price_logy() {
 #[test]
 fn easom_integration() {
     use std::f64::consts::PI;
-    run_integration_test(&[array![PI, PI]], 500.0, |command| {
+    run_integration_test(&[array![PI, PI]], 500.0, -1.0, |command| {
         command
             .arg("run")
             .arg("--seed=426")
@@ -212,7 +221,7 @@ fn himmelblau_ideal() -> [Array1<f64>; 4] {
 
 #[test]
 fn himmelblau_integration() {
-    run_integration_test(&himmelblau_ideal(), 0.1, |command| {
+    run_integration_test(&himmelblau_ideal(), 0.1, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=25565")
@@ -227,7 +236,7 @@ fn himmelblau_integration() {
 
 #[test]
 fn rastrigin_d2_integration() {
-    run_integration_test(&[vec![0.0; 2].into()], 0.2, |command| {
+    run_integration_test(&[vec![0.0; 2].into()], 0.2, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=17418")
@@ -243,7 +252,7 @@ fn rastrigin_d2_integration() {
 /// Finding the optimum for many dimensions is really difficult…
 #[test]
 fn rastrigin_d5_integration() {
-    run_integration_test(&[vec![0.0; 5].into()], 3.0, |command| {
+    run_integration_test(&[vec![0.0; 5].into()], 3.0, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=10763")
@@ -261,11 +270,11 @@ fn rastrigin_d5_integration() {
 
 #[test]
 fn rosenbrock_d2_integration() {
-    run_integration_test(&[vec![1.0; 2].into()], 0.1, |command| {
+    run_integration_test(&[vec![1.0; 2].into()], 0.1, 0.0, |command| {
         command
             .arg("run")
             .arg("--seed=19748")
-            .arg("--max-nevals=60")
+            .arg("--max-nevals=74")
             .arg("--initial=25")
             .arg("--popsize=7")
             .arg("--param=x1 real -2.5 2.5")
@@ -286,8 +295,12 @@ impl<A, Model> Default for Types<A, Model> {
     }
 }
 
-fn run_integration_test<Setup>(ideal: &[Array1<f64>], max_distance: f64, setup: Setup)
-where
+fn run_integration_test<Setup>(
+    ideal: &[Array1<f64>],
+    max_distance: f64,
+    ideal_value: f64,
+    setup: Setup,
+) where
     Setup: Fn(&mut Command) -> (),
 {
     let mut command = Command::cargo_bin("ggtune").unwrap();
@@ -325,12 +338,15 @@ where
             .into(),
         ideal,
     );
+    let mean = result["mean"].as_f64().expect("mean must be float");
+    let std = result["std"].as_f64().expect("std must be float");
 
-    if distance > max_distance {
+    if distance > max_distance && f64::abs(mean - ideal_value) < std {
         let mut data = result.clone();
         data["distance"] = json!(distance);
         data["max distance"] = json!(max_distance);
         data["ideal points"] = json!(ideal.iter().map(|x| x.to_vec()).collect_vec());
+        data["expected mean"] = json!(ideal_value);
         panic!("optimal point was not found {:#}", data);
     }
 }
