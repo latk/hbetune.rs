@@ -20,6 +20,10 @@ struct CliApp {
     #[structopt(long)]
     verbose: bool,
 
+    /// Output less information
+    #[structopt(long)]
+    quiet: bool,
+
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -53,6 +57,10 @@ struct CliCommandRun {
     /// How the objective value should be transformed (lin/linear or log/ln/logarithmic).
     #[structopt(long, default_value = "linear")]
     transform_objective: ggtune::Projection,
+
+    /// Whether 32-bit numbers should be used. Faster, but has numeric stability problems.
+    #[structopt(long)]
+    use_32: bool,
 
     #[structopt(subcommand)]
     objective: CliObjective,
@@ -100,10 +108,14 @@ struct CliBenchFunction {
 }
 
 impl CliObjective {
-    fn into_objective<'a>(
+    fn into_objective<'a, A>(
         self,
         space: &ggtune::Space,
-    ) -> Box<dyn ggtune::ObjectiveFunction<f64> + 'a> {
+    ) -> Box<dyn ggtune::ObjectiveFunction<A> + 'a>
+    where
+        A: ObjectiveValue,
+        f64: num_traits::AsPrimitive<A>,
+    {
         match self {
             CliObjective::Command { objective_command } => Box::new(
                 objective_shell::RunCommandAsObjective::new(objective_command, space.clone()),
@@ -143,10 +155,34 @@ impl std::str::FromStr for BenchFn {
     }
 }
 
-impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
-    fn run(&self, xs: &[ggtune::ParameterValue], rng: &mut ggtune::RNG) -> (f64, f64) {
+trait ObjectiveValue
+where
+    Self: num_traits::Float
+        + num_traits::FloatConst
+        + num_traits::Signed
+        + Into<f64>
+        + From<u16>
+        + From<i16>
+        + Default
+        + std::fmt::Display
+        + std::str::FromStr
+        + 'static,
+{
+}
+
+impl ObjectiveValue for f32 {}
+impl ObjectiveValue for f64 {}
+
+impl<A> ggtune::ObjectiveFunction<A> for CliBenchFunction
+where
+    A: ObjectiveValue,
+    f64: num_traits::AsPrimitive<A>,
+{
+    fn run(&self, xs: &[ggtune::ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
         use ggtune::benchfn;
-        let xs = xs.iter().map(|&x| x.into()).collect_vec();
+        use num_traits::AsPrimitive as _;
+
+        let xs = xs.iter().map(|&x| (x.to_f64().as_())).collect_vec();
         match self.function {
             BenchFn::GoldsteinPrice | BenchFn::Easom { .. } | BenchFn::Himmelblau => assert_eq!(
                 xs.len(),
@@ -159,17 +195,17 @@ impl ggtune::ObjectiveFunction<f64> for CliBenchFunction {
             | BenchFn::Onemax
             | BenchFn::SumAbs => {}
         };
-        let y = match self.function {
+        let y: A = match self.function {
             BenchFn::Sphere => benchfn::sphere(xs.into()),
             BenchFn::GoldsteinPrice => benchfn::goldstein_price(xs[0], xs[1]),
-            BenchFn::Easom { amplitude } => benchfn::easom(xs[0], xs[1], amplitude),
+            BenchFn::Easom { amplitude } => benchfn::easom(xs[0], xs[1], amplitude.as_()),
             BenchFn::Himmelblau => benchfn::himmelblau(xs[0], xs[1]),
-            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs.into(), amplitude),
+            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs.into(), amplitude.as_()),
             BenchFn::Rosenbrock => benchfn::rosenbrock(xs.into()),
             BenchFn::Onemax => benchfn::onemax(xs.into()),
             BenchFn::SumAbs => benchfn::sum_abs(xs.into()),
         };
-        (rng.normal(y, self.noise), Default::default())
+        (rng.normal(y.into(), self.noise).as_(), Default::default())
     }
 }
 
@@ -179,12 +215,22 @@ fn main() {
         println!("args: {:#?}", args);
     }
     match args.command {
-        CliCommand::Run(run) => command_run(run),
+        CliCommand::Run(run) => {
+            if run.use_32 {
+                command_run::<f32>(run, args.quiet)
+            } else {
+                command_run::<f64>(run, args.quiet)
+            }
+        }
         CliCommand::Function(function) => command_function(function),
     }
 }
 
-fn command_run(cfg: CliCommandRun) {
+fn command_run<A>(cfg: CliCommandRun, quiet: bool)
+where
+    A: ggtune::Scalar + ObjectiveValue,
+    f64: num_traits::AsPrimitive<A>,
+{
     use ggtune::{Estimator, EstimatorGPR, MinimizerArgs, ObjectiveFunction};
 
     let CliCommandRun {
@@ -193,6 +239,7 @@ fn command_run(cfg: CliCommandRun) {
         minimizer,
         objective,
         transform_objective,
+        use_32: _use_32,
     } = cfg;
 
     assert!(
@@ -207,13 +254,15 @@ fn command_run(cfg: CliCommandRun) {
 
     let mut rng = ggtune::RNG::new_with_seed(seed);
 
-    let objective: Box<dyn ObjectiveFunction<f64>> = objective.into_objective(&space);
+    let objective: Box<dyn ObjectiveFunction<A>> = objective.into_objective(&space);
 
-    let mut args = MinimizerArgs::<f64, EstimatorGPR>::default();
-    args.output
-        .add_human_readable_individuals(std::io::stdout(), &space);
+    let mut args = MinimizerArgs::<A, EstimatorGPR>::default();
+    if !quiet {
+        args.output
+            .add_human_readable_individuals(std::io::stdout(), &space);
+    }
     args.estimator =
-        Some(<EstimatorGPR as Estimator<f64>>::new(&space).y_projection(transform_objective));
+        Some(<EstimatorGPR as Estimator<A>>::new(&space).y_projection(transform_objective));
 
     let result = minimizer
         .minimize(objective.as_ref(), space.clone(), &mut rng, args)
@@ -264,7 +313,8 @@ fn command_function(function: CliCommandFunction) {
     let sample = args.into_iter().map(Into::into).collect_vec();
     let mut rng = ggtune::RNG::new_with_seed(seed);
 
-    let (value, _cost) = ggtune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
+    let (value, _cost): (f64, f64) =
+        ggtune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
 
     println!("{}", value);
 }

@@ -260,6 +260,15 @@ pub enum ParameterValue {
     Int(i64),
 }
 
+impl ParameterValue {
+    pub fn to_f64(self) -> f64 {
+        match self {
+            ParameterValue::Real(x) => x,
+            ParameterValue::Int(x) => x as f64,
+        }
+    }
+}
+
 impl From<f64> for ParameterValue {
     fn from(x: f64) -> ParameterValue {
         ParameterValue::Real(x)
@@ -274,10 +283,7 @@ impl From<i64> for ParameterValue {
 
 impl Into<f64> for ParameterValue {
     fn into(self) -> f64 {
-        match self {
-            ParameterValue::Real(x) => x,
-            ParameterValue::Int(x) => x as f64,
-        }
+        self.to_f64()
     }
 }
 
