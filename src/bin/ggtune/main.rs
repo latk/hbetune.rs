@@ -62,6 +62,11 @@ struct CliCommandRun {
     #[structopt(long)]
     use_32: bool,
 
+    /// A CSV into which evaluation results are written.
+    /// Overwrites the file contents!
+    #[structopt(long)]
+    write_csv: Option<std::path::PathBuf>,
+
     #[structopt(subcommand)]
     objective: CliObjective,
 }
@@ -214,7 +219,7 @@ fn main() {
     if args.verbose {
         println!("args: {:#?}", args);
     }
-    match args.command {
+    let result: Result<(), _> = match args.command {
         CliCommand::Run(run) => {
             if run.use_32 {
                 command_run::<f32>(run, args.quiet)
@@ -222,11 +227,16 @@ fn main() {
                 command_run::<f64>(run, args.quiet)
             }
         }
-        CliCommand::Function(function) => command_function(function),
+        CliCommand::Function(function) => Ok(command_function(function)),
+    };
+
+    if let Err(err) = result {
+        eprintln!("ERROR: {}", err);
+        std::process::exit(1);
     }
 }
 
-fn command_run<A>(cfg: CliCommandRun, quiet: bool)
+fn command_run<A>(cfg: CliCommandRun, quiet: bool) -> Result<(), failure::Error>
 where
     A: ggtune::Scalar + ObjectiveValue,
     f64: num_traits::AsPrimitive<A>,
@@ -240,9 +250,10 @@ where
         objective,
         transform_objective,
         use_32: _use_32,
+        write_csv,
     } = cfg;
 
-    assert!(
+    ensure!(
         !params.is_empty(),
         "Option --param must be provided at least once"
     );
@@ -256,17 +267,29 @@ where
 
     let objective: Box<dyn ObjectiveFunction<A>> = objective.into_objective(&space);
 
+    let mut opened_csv_file = None;
     let mut args = MinimizerArgs::<A, EstimatorGPR>::default();
+
     if !quiet {
         args.output
             .add_human_readable_individuals(std::io::stdout(), &space);
     }
+
+    if let Some(file) = write_csv {
+        opened_csv_file.replace(
+            std::fs::File::create(file)
+                .map_err(|err| format_err!("cannot open CSV file: {}", err))?,
+        );
+        args.output
+            .add_csv_writer(opened_csv_file.as_mut().unwrap(), &space)?;
+    }
+
     args.estimator =
         Some(<EstimatorGPR as Estimator<A>>::new(&space).y_projection(transform_objective));
 
     let result = minimizer
         .minimize(objective.as_ref(), space.clone(), &mut rng, args)
-        .expect("minimization should proceed successfully");
+        .map_err(|err| format_err!("error during minimization: {}", err))?;
 
     let suggestion_location = space
         .params()
@@ -301,6 +324,8 @@ where
             "q3": suggestion_statistics.q13().1,
         })
     );
+
+    Ok(())
 }
 
 fn command_function(function: CliCommandFunction) {

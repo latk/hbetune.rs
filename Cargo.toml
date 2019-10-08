@@ -5,6 +5,7 @@ authors = ["Lukas Atkinson"]
 edition = "2018"
 
 [dependencies]
+csv = "1.1.1"  # for machine-readable output of evaluations
 failure = "0.1.5"  # for convenient errors
 float-cmp = "0.5.2"  # for float equality, needed for Matérn optimization
 itertools = "0.8.0"  # for convenient iteration
@@ -21,6 +22,7 @@ rayon = "1.1"  # for simple multi-threading
 statrs = "0.11.0"  # for random distributions
 strfmt = "0.1.6"  # for text substitution of command line params
 structopt = "0.3.2"  # for command-line interface
+serde = { version = "1.0.101", features = ["derive"] }  # for machine-readable output of evaluations
 serde_json = "1.0.40"
 
 # the rand crates must share a common rand_core version,

@@ -1,18 +1,20 @@
 use crate::ParameterValue;
 use itertools::Itertools as _;
+use serde::{Deserialize, Serialize};
 
 type Generation = i64;
 
 /// Parameters and result of a pending or completed experiment.
 /// Many fields are write-once (checked dynamically).
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Individual<A> {
-    sample: Vec<ParameterValue>,
     gen: Option<Generation>,
-    prediction: Option<A>,
-    expected_improvement: Option<A>,
     observation: Option<A>,
+    prediction: Option<A>,
+    #[serde(rename = "ei")]
+    expected_improvement: Option<A>,
     cost: Option<A>,
+    sample: Vec<ParameterValue>,
 }
 
 impl<A> Individual<A> {

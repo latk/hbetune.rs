@@ -1,5 +1,6 @@
 //! A Gaussian Process Guided Tuner
 
+extern crate csv;
 #[macro_use]
 extern crate failure;
 #[macro_use]
@@ -12,6 +13,7 @@ extern crate noisy_float;
 extern crate num_traits;
 extern crate openblas_src;
 extern crate rayon;
+extern crate serde;
 extern crate statrs;
 #[macro_use]
 extern crate structopt;

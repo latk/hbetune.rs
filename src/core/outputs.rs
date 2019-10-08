@@ -231,4 +231,81 @@ impl<'life, A> Output<'life, A> {
             param_names,
         });
     }
+
+    pub fn add_csv_writer(
+        &mut self,
+        writer: impl std::io::Write + 'life,
+        space: &Space,
+    ) -> Result<(), csv::Error>
+    where
+        Individual<A>: serde::Serialize,
+    {
+        let mut writer = csv::WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(writer);
+        let mut header = vec!["gen", "observation", "prediction", "ei", "cost"];
+        header.extend(space.params().iter().map(|p| p.name()));
+        writer.write_record(&header)?;
+        self.add(CsvOutput { writer });
+        Ok(())
+    }
+}
+
+struct CsvOutput<Writer>
+where
+    Writer: std::io::Write,
+{
+    writer: csv::Writer<Writer>,
+}
+
+impl<A, Writer> OutputEventHandler<A> for CsvOutput<Writer>
+where
+    Writer: std::io::Write,
+    Individual<A>: serde::Serialize,
+{
+    fn event_evaluations_completed(&mut self, individuals: &[Individual<A>], _duration: Duration) {
+        for ind in individuals {
+            if let Err(err) = self.writer.serialize(ind) {
+                eprintln!("non-fatal error: while writing CSV entry: {}", err);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_csv_output() {
+    let mut ind = Individual::new(vec![ParameterValue::Int(3), ParameterValue::Real(-2.0)]);
+    ind.set_prediction_and_ei(11.1, 0.3).unwrap();
+    ind.set_evaluation_result(4, 12.9, 0.7).unwrap();
+    assert!(ind.is_fully_initialized());
+
+    let mut space = Space::new();
+    space.add_integer_parameter("x1", 0, 10);
+    space.add_real_parameter("x2", -3.2, 5.7);
+
+    let mut buffer = Vec::new();
+    {
+        let mut output = Output::new();
+        output.add_csv_writer(&mut buffer, &space).unwrap();
+
+        output.event_evaluations_completed(&[ind.clone()], Duration::from_millis(24));
+    }
+
+    let expected = "\
+                    gen,observation,prediction,ei,cost,x1,x2\n\
+                    4,12.9,11.1,0.3,0.7,3,-2.0\n";
+    assert_eq!(std::str::from_utf8(&buffer), Ok(expected));
+
+    // check roundtrip
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(buffer.as_slice());
+    let mut rows = reader.records();
+    rows.next(); // drop the header
+    let headers = None;
+    let des: Result<Vec<Individual<f64>>, _> = rows.map(|row| row?.deserialize(headers)).collect();
+    match des {
+        Ok(des) => assert_eq!(des, &[ind]),
+        Err(err) => panic!("error while deserializing from CSV: {}", err),
+    };
 }

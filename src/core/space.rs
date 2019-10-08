@@ -1,6 +1,7 @@
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 use rand::seq::SliceRandom as _;
+use serde::{Deserialize, Serialize};
 
 use crate::{Individual, Scalar, RNG};
 
@@ -254,10 +255,11 @@ fn project_from_range(x: f64, lo: f64, hi: f64) -> f64 {
     crate::util::clip(x * (hi - lo) + lo, Some(lo), Some(hi))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ParameterValue {
-    Real(f64),
     Int(i64),
+    Real(f64),
 }
 
 impl ParameterValue {
