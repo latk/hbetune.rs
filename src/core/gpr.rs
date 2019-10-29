@@ -108,11 +108,23 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             Some(vnorm.view_mut()),
         );
 
-        let distnorm = statrs::distribution::Normal::new(
-            (*mnorm.first().unwrap()).into(),
-            (vnorm.first().unwrap().sqrt()).into(),
-        )
-        .unwrap();
+        let vnorm_scalar = vnorm
+            .first()
+            .expect("should contain one element")
+            .sqrt()
+            .into();
+        let mnorm_scalar = (*mnorm.first().expect("should contain one element")).into();
+        let distnorm = if approx_eq!(f64, vnorm_scalar, 0.0) {
+            None
+        } else {
+            match statrs::distribution::Normal::new(mnorm_scalar, vnorm_scalar) {
+                Ok(distribution) => Some(distribution),
+                Err(err) => panic!(
+                    "could not create normal distribution with mean {} std {}: {}",
+                    mnorm_scalar, vnorm_scalar, err
+                ),
+            }
+        };
 
         let mean = *self
             .y_norm
@@ -130,7 +142,11 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             .first()
             .unwrap();
 
-        let q123norm = array![0.25, 0.5, 0.75].mapv(|x| A::from_f(distnorm.inverse_cdf(x)));
+        let q123norm = if let Some(distnorm) = distnorm {
+            array![0.25, 0.5, 0.75].mapv(|x| A::from_f(distnorm.inverse_cdf(x)))
+        } else {
+            array![mnorm_scalar, mnorm_scalar, mnorm_scalar].mapv(A::from_f)
+        };
         let q123 = self.y_norm.project_location_from_normalized(q123norm);
         let quartiles = match q123.to_vec().as_slice() {
             [q1, q2, q3] => [*q1, *q2, *q3],
