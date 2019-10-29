@@ -159,7 +159,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
     fn predict_mean_ei_a(&self, x: Array2<A>, fmin: A) -> (Array1<A>, Array1<A>) {
         use crate::core::acquisition::expected_improvement;
 
-        let mut y_var = Array1::zeros(x.rows());
+        let mut y_var = Array1::zeros(x.nrows());
         let y = predict(
             &self.kernel,
             self.alpha.view(),
@@ -175,7 +175,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             .first()
             .unwrap();
 
-        let mut ei: Array1<A> = Array1::zeros(x.rows());
+        let mut ei: Array1<A> = Array1::zeros(x.nrows());
         ndarray::Zip::from(&mut ei)
             .and(&y)
             .and(&y_var)
@@ -350,7 +350,7 @@ fn estimate_amplitude<A: Scalar>(
     y: ArrayView1<A>,
     bounds: Option<(f64, f64)>,
 ) -> BoundedValue<f64> {
-    use ndstats::Quantile1dExt;
+    use ndstats::Quantile1dExt as _;
     use noisy_float::types::N64;
     let (lo, hi) = bounds.unwrap_or_else(|| {
         let hi = y.mapv(|x| x.powi(2)).sum().into();
@@ -365,11 +365,7 @@ fn estimate_amplitude<A: Scalar>(
         let lo = if lo > 2e-5 { lo } else { 2e-5 };
         (lo / 2.0, hi * 2.0)
     });
-    let start = Array1::from_vec(vec![lo, hi])
-        .mapv_into(f64::ln)
-        .mean_axis(Axis(0))
-        .into_scalar()
-        .exp();
+    let start = f64::exp((lo.ln() + hi.ln()) / 2.0);
     BoundedValue::new(start, lo, hi).unwrap()
 }
 

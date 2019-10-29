@@ -376,6 +376,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
     let error = (&predicted_ys - &expected_ys)
         .mapv_into(|error| error.powi(2))
         .mean_axis(Axis(0))
+        .expect("mean should exist")
         .into_scalar()
         .sqrt();
 

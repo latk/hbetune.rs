@@ -1,5 +1,6 @@
 use itertools::Itertools as _;
 use ndarray::prelude::*;
+use std::iter::FromIterator as _;
 
 use crate::gpr::{Kernel, Scalar};
 

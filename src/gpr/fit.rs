@@ -39,7 +39,7 @@ fn fit_kernel<K: Kernel, A: Scalar>(
     n_restarts_optimizer: usize,
     noise: BoundedValue<f64>,
 ) -> FittedKernel<K, A> {
-    let n_observations = x_train.rows();
+    let n_observations = x_train.nrows();
     assert!(y_train.dim() == n_observations);
 
     struct Capture<A: Scalar> {

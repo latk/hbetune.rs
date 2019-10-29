@@ -10,9 +10,9 @@ failure = "0.1.5"  # for convenient errors
 float-cmp = "0.5.2"  # for float equality, needed for Matérn optimization
 itertools = "0.8.0"  # for convenient iteration
 lazy_static = "1.3.0"  # for convenient initialization
-ndarray = "0.12.1"  # like NumPy
-ndarray-linalg = { version = "0.11" }  # provides Cholesky decomposition
-ndarray-stats = "0.2.0"  # summary statistics
+ndarray = "0.13.0"  # like NumPy
+ndarray-linalg = { version = "0.12" }  # provides Cholesky decomposition
+ndarray-stats = "0.3.0"  # summary statistics
 nlopt = "0.5.1"  # for optimization algos, used for model fitting
 noisy_float = "0.1.11"  # needed for quantiles and for convenient sorting
 num-traits = "0.2.8"  # provides traits that describe floatishness

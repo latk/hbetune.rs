@@ -83,7 +83,7 @@ impl<A, Model> OptimizationResult<A, Model> {
             .iter()
             .map(|ind| ind.observation())
             .collect();
-        Some(Array::from_vec(ys?))
+        Some(Array::from(ys?))
     }
 
     /// Best observed value.

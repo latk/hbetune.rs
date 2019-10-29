@@ -36,12 +36,12 @@ impl Matern {
 impl Kernel for Matern {
     fn kernel<A: Scalar>(&self, x1: ArrayView2<A>, x2: ArrayView2<A>) -> Array2<A> {
         assert_eq!(
-            x1.cols(),
+            x1.ncols(),
             self.n_params(),
             "number of x1 columns must match number of features",
         );
         assert_eq!(
-            x2.cols(),
+            x2.ncols(),
             self.n_params(),
             "number of x2 columns must match number of features",
         );
@@ -81,11 +81,11 @@ impl Kernel for Matern {
 
     fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
         let kernel = self.kernel(x, x);
-        let gradient_shape = (x.rows(), x.rows(), self.n_params());
+        let gradient_shape = (x.nrows(), x.nrows(), self.n_params());
         let length_scale = self.length_scale_array().mapv(A::from_f);
 
         // pairwise dimension-wise distances: d[ijk] = (x[ik] - x[jk])**2 / length_scale[k]**2
-        let d_shape = (x.rows(), x.rows(), x.cols());
+        let d_shape = (x.nrows(), x.nrows(), x.ncols());
         let x_ik = x.insert_axis(Axis(1));
         let x_ik = x_ik.broadcast(d_shape).unwrap();
         let x_jk = x.insert_axis(Axis(0));
@@ -95,7 +95,7 @@ impl Kernel for Matern {
             .insert_axis(Axis(0))
             .insert_axis(Axis(0));
         let d = (&x_ik - &x_jk).mapv(|x| x.powi(2)) / scales_k_square;
-        assert_eq!(d.shape(), &[x.rows(), x.rows(), self.n_params()]);
+        assert_eq!(d.shape(), &[x.nrows(), x.nrows(), self.n_params()]);
 
         let gradient = match self.nu {
             nu if approx_eq!(f64, nu, 0.5) => {
@@ -135,7 +135,7 @@ impl Kernel for Matern {
     }
 
     fn diag<A: Scalar>(&self, x: ArrayView2<A>) -> Array1<A> {
-        Array::ones(x.rows())
+        Array::ones(x.nrows())
     }
 
     fn n_params(&self) -> usize {
@@ -260,7 +260,7 @@ mod cdist {
     use num_traits::Float;
 
     pub fn cdist<A: Scalar>(xa: ArrayView2<A>, xb: ArrayView2<A>) -> Array2<A> {
-        let mut out = Array2::zeros((xa.rows(), xb.rows()));
+        let mut out = Array2::zeros((xa.nrows(), xb.nrows()));
         for (i, a) in xa.outer_iter().enumerate() {
             for (j, b) in xb.outer_iter().enumerate() {
                 out[[i, j]] = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();

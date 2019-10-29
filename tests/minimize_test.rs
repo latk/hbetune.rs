@@ -1,8 +1,7 @@
-#[macro_use]
-extern crate ndarray;
 extern crate assert_cmd;
 extern crate ggtune;
 extern crate itertools;
+extern crate ndarray;
 extern crate noisy_float;
 extern crate serde_json;
 
@@ -14,8 +13,8 @@ use serde_json::json;
 use std::process::Command;
 
 fn sphere_objective<A: ggtune::Scalar>(xs: &[ParameterValue]) -> A {
-    let xs_array = xs.iter().cloned().map(Into::into).collect_vec().into();
-    let y: f64 = ggtune::benchfn::sphere(xs_array);
+    let xs_array = xs.iter().cloned().map(Into::<f64>::into).collect_vec();
+    let y: f64 = ggtune::benchfn::sphere(Array::from(xs_array));
     A::from_f(y)
 }
 

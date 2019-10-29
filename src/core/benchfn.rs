@@ -119,12 +119,13 @@ where
 ///
 /// ```
 /// # #[macro_use] extern crate ndarray;
+/// # use ndarray::prelude::*;
 /// # use ggtune::benchfn::rastrigin;
 /// # fn main() {
 /// assert_eq!(rastrigin(array![0.0f32], 10.0), 0.0, "minimum in 1D as f32");
 /// assert_eq!(rastrigin(array![0.0f64], 10.0), 0.0, "minimum in 1D as f64");
 /// assert_eq!(rastrigin(array![0.0, 0.0], 10.0), 0.0, "minimum in 2D");
-/// assert_eq!(rastrigin(vec![0.0; 10].into(), 10.0), 0.0, "minimum in 10D");
+/// assert_eq!(rastrigin(Array::from(vec![0.0; 10]), 10.0), 0.0, "minimum in 10D");
 /// # }
 /// ```
 ///
@@ -160,10 +161,11 @@ where
 ///
 /// ```
 /// # #[macro_use] extern crate ndarray;
+/// # use ndarray::prelude::*;
 /// # use ggtune::benchfn::rosenbrock;
 /// # fn main() {
 /// assert_eq!(rosenbrock(array![1.0, 1.0]), 0.0);
-/// assert_eq!(rosenbrock(vec![1.0; 6].into()), 0.0);
+/// assert_eq!(rosenbrock(Array::from(vec![1.0; 6])), 0.0);
 /// # }
 /// ```
 ///
@@ -209,12 +211,14 @@ where
 /// Optimum: f(0, ..., 0) = 0
 ///
 /// ```
+/// # extern crate ndarray;
 /// # use ggtune::benchfn::onemax;
-/// assert_eq!(onemax(vec![0.0f32; 1].into()), 0.0, "optimum for f32 1D");
-/// assert_eq!(onemax(vec![0.0f64; 1].into()), 0.0, "optimum for f64 1D");
-/// assert_eq!(onemax(vec![0.0; 6].into()), 0.0, "optimum for 6D");
-/// assert_eq!(onemax(vec![1.0; 1].into()), 1.0, "other point in 1D");
-/// assert_eq!(onemax(vec![1.0; 6].into()), 6.0, "other point in 6D");
+/// # use ndarray::prelude::*;
+/// assert_eq!(onemax(Array::from(vec![0.0f32; 1])), 0.0, "optimum for f32 1D");
+/// assert_eq!(onemax(Array::from(vec![0.0f64; 1])), 0.0, "optimum for f64 1D");
+/// assert_eq!(onemax(Array::from(vec![0.0; 6])), 0.0, "optimum for 6D");
+/// assert_eq!(onemax(Array::from(vec![1.0; 1])), 1.0, "other point in 1D");
+/// assert_eq!(onemax(Array::from(vec![1.0; 6])), 6.0, "other point in 6D");
 /// ```
 pub fn onemax<S, A>(xs: ArrayBase<S, Ix1>) -> A
 where

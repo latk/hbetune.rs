@@ -200,15 +200,18 @@ where
             | BenchFn::Onemax
             | BenchFn::SumAbs => {}
         };
+        use ndarray::Array;
         let y: A = match self.function {
-            BenchFn::Sphere => benchfn::sphere(xs.into()),
+            BenchFn::Sphere => benchfn::sphere(Array::from(xs)),
             BenchFn::GoldsteinPrice => benchfn::goldstein_price(xs[0], xs[1]),
             BenchFn::Easom { amplitude } => benchfn::easom(xs[0], xs[1], amplitude.as_()),
             BenchFn::Himmelblau => benchfn::himmelblau(xs[0], xs[1]),
-            BenchFn::Rastrigin { amplitude } => benchfn::rastrigin(xs.into(), amplitude.as_()),
-            BenchFn::Rosenbrock => benchfn::rosenbrock(xs.into()),
-            BenchFn::Onemax => benchfn::onemax(xs.into()),
-            BenchFn::SumAbs => benchfn::sum_abs(xs.into()),
+            BenchFn::Rastrigin { amplitude } => {
+                benchfn::rastrigin(Array::from(xs), amplitude.as_())
+            }
+            BenchFn::Rosenbrock => benchfn::rosenbrock(Array::from(xs)),
+            BenchFn::Onemax => benchfn::onemax(Array::from(xs)),
+            BenchFn::SumAbs => benchfn::sum_abs(Array::from(xs)),
         };
         (rng.normal(y.into(), self.noise).as_(), Default::default())
     }

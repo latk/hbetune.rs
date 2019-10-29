@@ -82,7 +82,7 @@ mod logwarp {
         let data: Array1<f64> = std::iter::repeat_with(|| rng.normal(-1.0, 1.0).exp())
             .take(500)
             .collect();
-        let logmean = data.mapv(Float::ln).mean();
+        let logmean = data.mapv(Float::ln).mean().expect("mean must exist");
         let logvar = data.mapv(Float::ln).population_variance();
         let actual_mean = *project_mean_from(array![logmean], array![logvar])
             .first()
@@ -91,7 +91,7 @@ mod logwarp {
             .first()
             .unwrap()
             .sqrt();
-        let expected_mean = data.mean();
+        let expected_mean = data.mean().expect("mean must exist");
         let expected_std = data.population_std_dev();
         // because we use noisy data, the comparison must be very rough
         assert!(
@@ -289,7 +289,7 @@ fn guess_min<A>(y: ArrayView1<A>, minimum: A) -> A
 where
     A: crate::Scalar,
 {
-    *y.min().unwrap() - minimum
+    *y.min().expect("minimum should exist") - minimum
 }
 
 /// select a value so that the mean can be normalized to 1, as long as any deviation exists
@@ -297,7 +297,10 @@ fn guess_amplitude<A>(y: ArrayView1<A>) -> A
 where
     A: crate::Scalar,
 {
-    let amplitude = y.mean_axis(Axis(0)).into_scalar();
+    let amplitude = y
+        .mean_axis(Axis(0))
+        .expect("mean should exist")
+        .into_scalar();
     if amplitude > A::from_f(0.0) {
         amplitude
     } else {
@@ -435,13 +438,13 @@ mod tests {
         let data: Array1<f64> = std::iter::repeat_with(|| rng.normal(3.0, 1.0).exp())
             .take(500)
             .collect();
-        let expected_mean = data.mean();
+        let expected_mean = data.mean().expect("mean must exist");
         let expected_std = data.population_std_dev();
         let expected_cv = expected_std / expected_mean;
 
         let (transformed, norm) = YNormalize::new_project_into_normalized(data.clone(), projection);
 
-        let transformed_mean = transformed.mean();
+        let transformed_mean = transformed.mean().expect("mean must exist");
         let transformed_variance = transformed.population_variance();
 
         let actual_mean = *norm

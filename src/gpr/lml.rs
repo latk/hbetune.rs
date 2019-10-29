@@ -38,7 +38,7 @@ fn lml_with_gradient<A: Scalar>(
     // stack(noise gradient, kernel gradient).
     // However, actually performing the stacking is unnecessary.
     let (mut kernel_matrix, kernel_gradient) = kernel.theta_grad(x_train);
-    let noise_gradient = Array2::eye(x_train.rows()) * noise;
+    let noise_gradient = Array2::eye(x_train.nrows()) * noise;
 
     // add noise to kernel matrix
     kernel_matrix.diag_mut().map_mut(|x| *x += noise);
