@@ -532,7 +532,11 @@ impl std::str::FromStr for Parameter {
             })
         }
 
-        let mut items = s.split_whitespace();
+        // split on whitespace and colons
+        let mut items = s
+            .split_whitespace()
+            .flat_map(|tok| tok.split(':'))
+            .filter(|s| !s.is_empty());
         let (name, the_type) = items
             .next()
             .and_then(|name| items.next().map(|the_type| (name.to_owned(), the_type)))
