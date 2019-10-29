@@ -261,9 +261,18 @@ mod cdist {
 
     pub fn cdist<A: Scalar>(xa: ArrayView2<A>, xb: ArrayView2<A>) -> Array2<A> {
         let mut out = Array2::zeros((xa.nrows(), xb.nrows()));
-        for (i, a) in xa.outer_iter().enumerate() {
-            for (j, b) in xb.outer_iter().enumerate() {
-                out[[i, j]] = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
+        // TODO benchmark these alternatives
+        if false {
+            for (a, rowa) in xa.outer_iter().zip(out.outer_iter_mut()) {
+                for (b, itemb) in (xb.outer_iter()).zip(rowa) {
+                    *itemb = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
+                }
+            }
+        } else {
+            for (i, a) in xa.outer_iter().enumerate() {
+                for (j, b) in xb.outer_iter().enumerate() {
+                    out[[i, j]] = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
+                }
             }
         }
         out
