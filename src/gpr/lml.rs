@@ -34,10 +34,11 @@ fn lml_with_gradient<A: Scalar>(
 ) -> Option<LmlWithGradient<A>> {
     use ndarray_linalg::cholesky::*;
 
-    // calculate combined gradient
+    // calculate combined gradient which has dim3
+    // stack(noise gradient, kernel gradient).
+    // However, actually performing the stacking is unnecessary.
     let (mut kernel_matrix, kernel_gradient) = kernel.theta_grad(x_train);
-    let noise_gradient = Array2::eye(x_train.rows()).insert_axis(Axis(2)) * noise;
-    let gradient = stack!(Axis(2), noise_gradient, kernel_gradient);
+    let noise_gradient = Array2::eye(x_train.rows()) * noise;
 
     // add noise to kernel matrix
     kernel_matrix.diag_mut().map_mut(|x| *x += noise);
@@ -59,11 +60,12 @@ fn lml_with_gradient<A: Scalar>(
 
     let lml_gradient = {
         let tmp = outer::outer(alpha.view(), alpha.view()) - &factorization.invc().unwrap();
-        // compute "0.5 * trace(tmp dot kernel_gradient)"
+        // Compute "0.5 * trace(tmp dot gradient)"
         // without constructing the full matrix
-        // as only the diagonal is required
-        gradient
-            .axis_iter(Axis(2))
+        // as only the diagonal is required.
+        // Additionally, we can split up the computation of the stacked gradient matrix
+        std::iter::once(noise_gradient.view())
+            .chain(kernel_gradient.axis_iter(Axis(2)))
             .map(|grad| 0.5 * (&tmp * &grad).sum().into())
             .collect()
     };
