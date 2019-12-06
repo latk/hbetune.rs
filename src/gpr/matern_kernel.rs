@@ -66,14 +66,15 @@ impl Kernel for Matern {
             nu if approx_eq!(f64, nu, 0.5) => (-dists).mapv(Float::exp),
             nu if approx_eq!(f64, nu, 1.5) => {
                 let kernel: Array2<A> = dists * A::from_f(3.0.sqrt());
-                (kernel.clone() + A::from_i(1)) * (-kernel).mapv(Float::exp)
+                kernel.mapv(|k| (k + A::from_i(1)) * (-k).exp())
             }
             nu if approx_eq!(f64, nu, 2.5) => {
-                // K = dists * sqrt(4)
+                // K = dists * sqrt(5)
                 let kernel: Array2<A> = dists * A::from_f(5.0.sqrt());
                 // (1 + K + K**2 / 3) * exp(-K)
-                (kernel.mapv(|x| x.powi(2)) / A::from_i(3) + &kernel + A::from_i(1))
-                    * (-kernel).mapv(Float::exp)
+                kernel.mapv(|k| (A::from_i(1) + k + k.powi(2) / A::from_i(3)) * (-k).exp())
+                // (kernel.mapv(|x| x.powi(2)) / A::from_i(3) + &kernel + A::from_i(1))
+                //     * (-kernel).mapv(Float::exp)
             }
             _ => unimplemented!("Matern kernel with arbitrary values for nu"),
         }
@@ -90,11 +91,11 @@ impl Kernel for Matern {
         let x_ik = x_ik.broadcast(d_shape).unwrap();
         let x_jk = x.insert_axis(Axis(0));
         let x_jk = x_jk.broadcast(d_shape).unwrap();
-        let scales_k_square = length_scale
-            .mapv(|x| x.powi(2))
-            .insert_axis(Axis(0))
-            .insert_axis(Axis(0));
-        let d = (&x_ik - &x_jk).mapv(|x| x.powi(2)) / scales_k_square;
+        let scales_k_square = length_scale.mapv(|x| x.powi(2));
+        let mut d = (&x_ik - &x_jk).mapv(|x| x.powi(2));
+        for mut row in d.genrows_mut() {
+            row /= &scales_k_square;
+        }
         assert_eq!(d.shape(), &[x.nrows(), x.nrows(), self.n_params()]);
 
         let gradient = match self.nu {
@@ -110,11 +111,10 @@ impl Kernel for Matern {
             }
             nu if approx_eq!(f64, nu, 1.5) => {
                 // gradient = 3 * d * exp(-sqrt(3 * d.sum(-1)))[..., np.newaxis]
-                let tmp =
-                    (-(d.sum_axis(Axis(2)) * A::from_i(3)).mapv(Float::sqrt)).mapv(Float::exp);
-                &d.broadcast(gradient_shape).unwrap()
-                    * &tmp.insert_axis(Axis(2)).broadcast(gradient_shape).unwrap()
-                    * A::from_i(3)
+                let tmp = d
+                    .sum_axis(Axis(2))
+                    .mapv(|d| Float::exp(-Float::sqrt(d * A::from_i(3))));
+                &d * &tmp.insert_axis(Axis(2)).broadcast(gradient_shape).unwrap() * A::from_i(3)
             }
             nu if approx_eq!(f64, nu, 2.5) => {
                 let tmp: Array3<A> = (d.sum_axis(Axis(2)) * A::from_i(5))
@@ -260,19 +260,23 @@ mod cdist {
     use num_traits::Float;
 
     pub fn cdist<A: Scalar>(xa: ArrayView2<A>, xb: ArrayView2<A>) -> Array2<A> {
-        let mut out = Array2::zeros((xa.nrows(), xb.nrows()));
-        // TODO benchmark these alternatives
-        if false {
-            for (a, rowa) in xa.outer_iter().zip(out.outer_iter_mut()) {
-                for (b, itemb) in (xb.outer_iter()).zip(rowa) {
-                    *itemb = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
+        assert_eq!(xa.ncols(), xb.ncols());
+        let n_cols = xa.ncols();
+        let xa_nrows = xa.nrows();
+        let xb_nrows = xb.nrows();
+
+        let mut out = Array2::zeros((xa_nrows, xb_nrows));
+
+        // SAFETY: the loop ranges guarantee that no bounds are violated.
+        for ai in 0..xa_nrows {
+            for bi in 0..xb_nrows {
+                let mut accum = A::zero();
+                for i in 0..n_cols {
+                    let xa_i = unsafe { *xa.uget([ai, i]) };
+                    let xb_i = unsafe { *xb.uget([bi, i]) };
+                    accum += (xa_i - xb_i).powi(2);
                 }
-            }
-        } else {
-            for (i, a) in xa.outer_iter().enumerate() {
-                for (j, b) in xb.outer_iter().enumerate() {
-                    out[[i, j]] = (&a - &b).mapv_into(|x| x.powi(2)).sum().sqrt();
-                }
+                *unsafe { out.uget_mut([ai, bi]) } = accum.sqrt();
             }
         }
         out

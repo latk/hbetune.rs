@@ -22,3 +22,6 @@ release:
 
 run:
 	$(CARGO) run $(ARGS)
+
+flamegraph.svg: $(wildcard src/** tests/**)
+	$(CARGO) flamegraph --dev --test minimize_test -- --test-threads 1

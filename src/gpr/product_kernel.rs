@@ -40,12 +40,32 @@ where
     fn theta_grad<A: Scalar>(&self, x: ArrayView2<A>) -> (Array2<A>, Array3<A>) {
         let (kernel1, gradient1) = self.k1.theta_grad(x);
         let (kernel2, gradient2) = self.k2.theta_grad(x);
+
+        let dim0 = kernel1.nrows();
+        let dim1 = kernel1.ncols();
+        let dim2a = gradient1.len_of(Axis(2));
+        let dim2b = gradient2.len_of(Axis(2));
+
+        assert_eq!(dim0, kernel2.nrows());
+        assert_eq!(dim0, gradient1.len_of(Axis(0)));
+        assert_eq!(dim0, gradient2.len_of(Axis(0)));
+        assert_eq!(dim1, kernel2.ncols());
+        assert_eq!(dim1, gradient1.len_of(Axis(1)));
+        assert_eq!(dim1, gradient2.len_of(Axis(1)));
+
         let kernel = &kernel1 * &kernel2;
-        let gradient = stack!(
-            Axis(2),
-            gradient1 * kernel2.insert_axis(Axis(2)),
-            gradient2 * kernel1.insert_axis(Axis(2))
-        );
+        let g1k2 = gradient1 * kernel2.insert_axis(Axis(2));
+        let g2k1 = gradient2 * kernel1.insert_axis(Axis(2));
+
+        // SAFETY: shape bounds guarantee correct accesses
+        let gradient = Array::from_shape_fn((dim0, dim1, dim2a + dim2b), |(i0, i1, i2)| {
+            if i2 < dim2a {
+                *unsafe { g1k2.uget([i0, i1, i2]) }
+            } else {
+                *unsafe { g2k1.uget([i0, i1, i2 - dim2a])}
+            }
+        });
+
         (kernel, gradient)
     }
 
