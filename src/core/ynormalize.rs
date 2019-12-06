@@ -61,7 +61,7 @@ mod logwarp {
         ];
         const EPSILON: f64 = 1e-6;
         assert!(
-            actual.all_close(&expected, EPSILON),
+            abs_diff_eq!(actual, &expected, epsilon = EPSILON),
             "mean failed\n\
              in  logmean : {}\n\
              in  logstd  : {}\n\
@@ -134,7 +134,7 @@ mod logwarp {
             * logstd.mapv(|x| sqrt(exp(x * x) - 1.0));
         const EPSILON: f64 = 1e-7;
         assert!(
-            actual.all_close(&expected, EPSILON),
+            abs_diff_eq!(actual, &expected, epsilon = EPSILON),
             "variance failed (shown as std):\n\
              in  logmean : {}\n\
              in  logstd  : {}\n\
@@ -250,7 +250,7 @@ where
     ) -> Array1<A> {
         let Self {
             amplitude,
-            expected: _,
+            expected: _expected,
             projection,
         } = *self;
         match projection {
@@ -318,7 +318,7 @@ mod tests {
         let rey = norm.project_into_normalized(input.clone());
         let result = norm.project_location_from_normalized(y.clone());
         assert!(
-            input.all_close(&result, 1e-4),
+            abs_diff_eq!(input, &result, epsilon = 1e-4),
             "result should be close to input\n\
              input : {}\n\
              result: {}",
@@ -326,7 +326,7 @@ mod tests {
             result
         );
         assert!(
-            y.all_close(&rey, 1e-4),
+            abs_diff_eq!(y, &rey, epsilon = 1e-4),
             "project_into variants should produce same result\n\
              new_project_into_normalized : {}\n\
              norm.project_into_normalized: {}",
@@ -365,7 +365,7 @@ mod tests {
         let std = norm.project_std_from_normalized(Array1::zeros(3).view(), array![0.0, 1.0, 4.0]);
         let expected = array![0.0, 3.0, 6.0];
         assert!(
-            std.all_close(&expected, 1e-4),
+            abs_diff_eq!(std, &expected, epsilon = 1e-4),
             "expected: {} but got: {}",
             expected,
             std

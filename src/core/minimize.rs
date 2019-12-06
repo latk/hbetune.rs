@@ -678,30 +678,33 @@ where
 }
 
 #[cfg(test)]
-speculate::speculate! {
-    describe "fn replace_worst_n_individuals()" {
-        it "replaces worst individuals" {
-            assert_eq!(
-                replace_worst_n_individuals(
-                    3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![1, 2, 3],
-                    std::cmp::Ord::cmp),
-                vec![1, 1, 2, 2, 3, 3, 4, 5]);
-        }
+mod fn_replace_worst_n_individuals {
+    use super::*;
 
-        it "does not replace better individuals" {
-            assert_eq!(
-                replace_worst_n_individuals(
-                    3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![7, 8, 9, 10],
-                    std::cmp::Ord::cmp),
-                vec![1, 2, 3, 4, 5, 6, 7, 7]);
-        }
+    #[test]
+    fn replaces_worst_individuals() {
+        assert_eq!(
+            replace_worst_n_individuals(
+                3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![1, 2, 3],
+                std::cmp::Ord::cmp),
+            vec![1, 1, 2, 2, 3, 3, 4, 5]);
+    }
 
-        it "considers up to n replacements" {
-            assert_eq!(
-                replace_worst_n_individuals(
-                    3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2, 3],
-                    std::cmp::Ord::cmp),
-                vec![1, 2, 2, 2, 2, 3, 4, 5]);
-        }
+    #[test]
+    fn does_not_replace_better_individuals() {
+        assert_eq!(
+            replace_worst_n_individuals(
+                3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![7, 8, 9, 10],
+                std::cmp::Ord::cmp),
+            vec![1, 2, 3, 4, 5, 6, 7, 7]);
+    }
+
+    #[test]
+    fn considers_up_to_n_replacements() {
+        assert_eq!(
+            replace_worst_n_individuals(
+                3, vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2, 3],
+                std::cmp::Ord::cmp),
+            vec![1, 2, 2, 2, 2, 3, 4, 5]);
     }
 }

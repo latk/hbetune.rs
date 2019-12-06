@@ -230,7 +230,7 @@ fn main() {
                 command_run::<f64>(run, args.quiet)
             }
         }
-        CliCommand::Function(function) => Ok(command_function(function)),
+        CliCommand::Function(function) => command_function(function),
     };
 
     if let Err(err) = result {
@@ -331,7 +331,7 @@ where
     Ok(())
 }
 
-fn command_function(function: CliCommandFunction) {
+fn command_function(function: CliCommandFunction) -> Result<(), failure::Error> {
     let CliCommandFunction {
         seed,
         function,
@@ -345,4 +345,6 @@ fn command_function(function: CliCommandFunction) {
         ggtune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
 
     println!("{}", value);
+
+    Ok(())
 }

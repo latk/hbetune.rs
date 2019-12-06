@@ -127,18 +127,20 @@ fn clamp_negative_variance<A: Scalar>(
 }
 
 #[cfg(test)]
-speculate::speculate! {
-    describe "fn clamp_negative_variance()" {
-        it "returns elements with very negative variances" {
-            let mut variances = array![1., -2., -0.5];
-            assert_eq!(clamp_negative_variance(variances.view_mut(), -1.), Some(vec![-2.]));
-            assert_eq!(variances, array![1., 0., 0.]);
-        }
+mod fn_clamp_negative_variance {
+    use super::*;
 
-        it "does not return element with mild negative variances" {
-            let mut variances = array![1., 2., -0.5];
-            assert_eq!(clamp_negative_variance(variances.view_mut(), -1.), None);
-            assert_eq!(variances, array![1., 2., 0.]);
-        }
+    #[test]
+    fn returns_elements_with_very_negative_variances() {
+        let mut variances = array![1., -2., -0.5];
+        assert_eq!(clamp_negative_variance(variances.view_mut(), -1.), Some(vec![-2.]));
+        assert_eq!(variances, array![1., 0., 0.]);
+    }
+
+    #[test]
+    fn does_not_return_elements_with_mild_negative_variances() {
+        let mut variances = array![1., 2., -0.5];
+        assert_eq!(clamp_negative_variance(variances.view_mut(), -1.), None);
+        assert_eq!(variances, array![1., 2., 0.]);
     }
 }

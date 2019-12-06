@@ -19,7 +19,8 @@ extern crate statrs;
 extern crate structopt;
 
 #[cfg(test)]
-extern crate speculate;
+#[macro_use]
+extern crate approx;
 
 #[macro_use]
 mod util;
