@@ -133,7 +133,10 @@ mod fn_clamp_negative_variance {
     #[test]
     fn returns_elements_with_very_negative_variances() {
         let mut variances = array![1., -2., -0.5];
-        assert_eq!(clamp_negative_variance(variances.view_mut(), -1.), Some(vec![-2.]));
+        assert_eq!(
+            clamp_negative_variance(variances.view_mut(), -1.),
+            Some(vec![-2.])
+        );
         assert_eq!(variances, array![1., 0., 0.]);
     }
 

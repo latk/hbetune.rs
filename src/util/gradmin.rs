@@ -89,7 +89,13 @@ mod test {
             let mut x = vec![0.0; 2];
             let mut rng = RNG::new_with_seed(17176);
             let f = minimize_by_gradient_with_restarts(
-                &slanted_plane, x.as_mut_slice(), &[(-2.0, 2.0); 2], (), 3, &mut rng);
+                &slanted_plane,
+                x.as_mut_slice(),
+                &[(-2.0, 2.0); 2],
+                (),
+                3,
+                &mut rng,
+            );
             assert_eq!((f, x.as_slice()), (-4.0, vec![-2.0, -2.0].as_slice()));
         }
     }

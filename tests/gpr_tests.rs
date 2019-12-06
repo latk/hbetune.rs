@@ -86,11 +86,9 @@ mod describe_gpr {
             let xs = array![0.1, 0.5, 0.5, 0.9].insert_axis(Axis(1));
             let ys = array![1.0, 1.8, 2.2, 3.0];
             let space = make_space();
-            let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space).estimate(
-                xs, ys,
-                None,
-                &mut RNG::new_with_seed(123),
-            ).unwrap();
+            let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+                .estimate(xs, ys, None, &mut RNG::new_with_seed(123))
+                .unwrap();
             SimpleModel { space, model }
         }
 
@@ -143,11 +141,8 @@ mod describe_gpr {
             let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
                 .noise_bounds(1e-5, 1e0)
                 .length_scale_bounds(vec![(0.1, 1.0)])
-                .estimate(
-                    xs, ys,
-                    None,
-                    &mut RNG::new_with_seed(9372),
-                ).unwrap();
+                .estimate(xs, ys, None, &mut RNG::new_with_seed(9372))
+                .unwrap();
             eprintln!("estimated mode: {:#?}", model);
             SimpleModel { space, model }
         }
@@ -188,36 +183,41 @@ mod describe_gpr {
         let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
             .length_scale_bounds(vec![(1e-2, 1e1)])
             .noise_bounds(1e-2, 1e1)
-            .estimate(
-                xs.clone(), ys,
-                None, &mut RNG::new_with_seed(4531),
-            ).unwrap();
+            .estimate(xs.clone(), ys, None, &mut RNG::new_with_seed(4531))
+            .unwrap();
         eprintln!("trained model: {:#?}", model);
 
         let check_predictions = |xs: &Array2<f64>| {
             let expected_ys: Array1<_> = xs.outer_iter().map(sphere).collect();
 
-            let (predicted_ys, predicted_std): (Vec<f64>, Vec<f64>) =
-                xs.outer_iter()
+            let (predicted_ys, predicted_std): (Vec<f64>, Vec<f64>) = xs
+                .outer_iter()
                 .map(|x| {
                     let stats = model.predict_statistics(x.to_owned());
                     (stats.mean(), stats.std())
                 })
                 .unzip();
 
-            let is_ok = izip!(expected_ys.outer_iter(),
-                                predicted_ys.iter(),
-                                predicted_std.iter())
-                .all(|(expected, &y, &std)| {
-                    let expected = expected.to_owned().into_scalar();
-                    expected - 0.6 * std < y && y < expected + std
-                });
+            let is_ok = izip!(
+                expected_ys.outer_iter(),
+                predicted_ys.iter(),
+                predicted_std.iter()
+            )
+            .all(|(expected, &y, &std)| {
+                let expected = expected.to_owned().into_scalar();
+                expected - 0.6 * std < y && y < expected + std
+            });
 
-            assert!(is_ok, "expected values were not within the predicted 1σ region\n\
-                            *   expected ys: {}\n\
-                            *  predicted ys: {}\n\
-                            * predicted std: {}\n",
-                    expected_ys, Array1::from(predicted_ys), Array1::from(predicted_std));
+            assert!(
+                is_ok,
+                "expected values were not within the predicted 1σ region\n\
+                 *   expected ys: {}\n\
+                 *  predicted ys: {}\n\
+                 * predicted std: {}\n",
+                expected_ys,
+                Array1::from(predicted_ys),
+                Array1::from(predicted_std)
+            );
         };
 
         check_predictions(&xs);
