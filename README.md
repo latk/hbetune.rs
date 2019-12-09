@@ -5,7 +5,7 @@ for expensive, noisy, black-box functions.
 It uses a hybrid algorithm combining Bayesian Optimization
 and Evolutionary Algorithms.
 
-# `ggtune`
+## `ggtune`
 
 Usage: `ggtune [OPTIONS] COMMAND ...`
 
@@ -22,7 +22,7 @@ Commands:
 * **`run`**: run the ggtune minimizer.
 * **`function`**: evaluate a built-in benchmark function.
 
-# `ggtune run`
+## `ggtune run`
 
 Usage: `ggtune run [OPTIONS] OBJECTIVE ...`
 
@@ -129,7 +129,7 @@ Objective function:
   use a built-in benchmark function as the objective function,
   see `ggtune function`.
 
-# `ggtune function`
+## `ggtune function`
 
 Usage: `ggtune function [OPTIONS] NAME ARGS...`
 
@@ -154,3 +154,17 @@ Available functions:
 * **`rosenbrock`**
 * **`onemax`**
 * **`sum-abs`**
+
+## Installation
+
+While this software is an ordinary Rust package,
+it is advised to not run `cargo` directly,
+at least the first time:
+the software builds its own OpenBLAS library with custom options,
+which requires environment variables to set in the Makefile
+(until [rust-lang/cargo#4121](https://github.com/rust-lang/cargo/issues/4121)
+is resolved).
+Therefore:
+
+* `make install` to install the software locally, or
+* `make release` to compile a statically-linked executable into `target/release/ggtune`
