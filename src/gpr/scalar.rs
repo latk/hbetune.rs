@@ -10,7 +10,7 @@ pub trait Scalar
     // + From<f64>
     + Into<f64>
     + rand::distributions::uniform::SampleUniform
-    + float_cmp::ApproxEq
+    + approx::AbsDiffEq
 {
     fn from_f<F: Into<f64>>(x: F) -> Self;
     fn from_i(x: i16) -> Self { std::convert::From::from(x) }

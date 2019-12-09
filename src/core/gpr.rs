@@ -114,7 +114,7 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
             .sqrt()
             .into();
         let mnorm_scalar = (*mnorm.first().expect("should contain one element")).into();
-        let distnorm = if approx_eq!(f64, vnorm_scalar, 0.0) {
+        let distnorm = if abs_diff_eq!(vnorm_scalar, 0.0) {
             None
         } else {
             match statrs::distribution::Normal::new(mnorm_scalar, vnorm_scalar) {

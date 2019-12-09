@@ -76,7 +76,6 @@ mod logwarp {
 
     #[test]
     fn test_project_mean_std_from_data() {
-        use float_cmp::ApproxEqRatio as _;
         use statrs::statistics::Statistics as _;
         let mut rng = crate::RNG::new_with_seed(83229);
         let data: Array1<f64> = std::iter::repeat_with(|| rng.normal(-1.0, 1.0).exp())
@@ -95,8 +94,8 @@ mod logwarp {
         let expected_std = data.population_std_dev();
         // because we use noisy data, the comparison must be very rough
         assert!(
-            expected_mean.approx_eq_ratio(&actual_mean, 0.05)
-                & expected_std.approx_eq_ratio(&actual_std, 0.15),
+            relative_eq!(expected_mean, actual_mean, max_relative = 0.05)
+                & relative_eq!(expected_std, actual_std, max_relative = 0.15),
             "test failed\n\
              mean   log: {:20}\n\
              | expected: {:20}\n\
@@ -386,7 +385,7 @@ mod tests {
             .first()
             .unwrap();
         assert!(
-            approx_eq!(f64, actual_mean, expected_mean, epsilon = 1E-7),
+            abs_diff_eq!(actual_mean, expected_mean, epsilon = 1E-7),
             "expected {} but got {}\n\
              for test norm: {:?}, mean: {} std: {}",
             expected_mean,
@@ -430,7 +429,6 @@ mod tests {
     }
 
     fn test_statistics(projection: Projection, mean_ratio: f64, std_ratio: f64) {
-        use float_cmp::ApproxEqRatio as _;
         use statrs::statistics::Statistics as _;
 
         // let data = array![1.0, 2.0, 3.0, 4.0, 5.0, 2.0];
@@ -471,9 +469,9 @@ mod tests {
 
         let cv_ratio = ((mean_ratio).powi(2) + (std_ratio).powi(2)).sqrt();
         assert!(
-            actual_mean.approx_eq_ratio(&expected_mean, mean_ratio)
-                & actual_std.approx_eq_ratio(&expected_std, std_ratio)
-                & actual_cv.approx_eq_ratio(&expected_cv, cv_ratio),
+            relative_eq!(actual_mean, expected_mean, max_relative = mean_ratio)
+                & relative_eq!(actual_std, expected_std, max_relative = std_ratio)
+                & relative_eq!(actual_cv, expected_cv, max_relative = cv_ratio),
             "projections failed to produce expected results\n\
              mean got: {:20} expected: {:20}\n\
              std  got: {:20} expected: {:20}\n\

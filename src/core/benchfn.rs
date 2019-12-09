@@ -64,15 +64,15 @@ where
 /// Optimum: f(pi, pi) = 0
 ///
 /// ```
-/// # #[macro_use] extern crate float_cmp;
+/// # #[macro_use] extern crate approx;
 /// # use ggtune::benchfn::easom;
 /// # fn main() {
 /// const PI32: f32 = std::f32::consts::PI;
 /// const PI64: f64 = std::f64::consts::PI;
 /// assert_eq!(easom(PI32, PI32, 1.0), 0.0, "optimum with f32");
 /// assert_eq!(easom(PI64, PI64, 1.0), 0.0, "optimum with f64");
-/// assert!(approx_eq!(f64, easom(0.0, 0.0, 1.0), 1.0, epsilon = 1e-5), "center is one");
-/// assert!(approx_eq!(f64, easom(0.0, 0.0, 3.0), 3.0, epsilon = 1e-5), "can be scaled");
+/// assert!(abs_diff_eq!(easom(0.0, 0.0, 1.0), 1.0, epsilon = 1e-5), "center is one");
+/// assert!(abs_diff_eq!(easom(0.0, 0.0, 3.0), 3.0, epsilon = 1e-5), "can be scaled");
 /// # }
 /// ```
 ///
@@ -94,13 +94,13 @@ where
 ///
 /// ```
 /// # use ggtune::benchfn::himmelblau;
-/// # #[macro_use] extern crate float_cmp;
+/// # #[macro_use] extern crate approx;
 /// # fn main() {
-/// assert!(approx_eq!(f64, himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "min 1");
-/// assert!(approx_eq!(f64, himmelblau(-2.805118, 3.131312), 0.0, epsilon = 1E-5), "min 2");
-/// assert!(approx_eq!(f64, himmelblau(-3.779310, -3.283186), 0.0, epsilon = 1E-5), "min 3");
-/// assert!(approx_eq!(f64, himmelblau(3.584428, -1.848126), 0.0, epsilon = 1E-5), "min 4");
-/// assert!(approx_eq!(f32, himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "works with f32");
+/// assert!(abs_diff_eq!(himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "min 1");
+/// assert!(abs_diff_eq!(himmelblau(-2.805118, 3.131312), 0.0, epsilon = 1E-5), "min 2");
+/// assert!(abs_diff_eq!(himmelblau(-3.779310, -3.283186), 0.0, epsilon = 1E-5), "min 3");
+/// assert!(abs_diff_eq!(himmelblau(3.584428, -1.848126), 0.0, epsilon = 1E-5), "min 4");
+/// assert!(abs_diff_eq!(himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "works with f32");
 /// # }
 /// ```
 pub fn himmelblau<A>(x1: A, x2: A) -> A

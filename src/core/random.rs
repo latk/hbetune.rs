@@ -1,8 +1,9 @@
 extern crate rand;
 extern crate rand_core;
+extern crate rand_distr;
 extern crate rand_xoshiro;
-use rand::distributions::{self, Distribution as _};
 use rand_core::SeedableRng;
+use rand_distr::{self as distributions, Distribution as _};
 use std::convert::TryInto as _;
 
 type BasicRNG = rand_xoshiro::Xoshiro256StarStar;
@@ -29,18 +30,21 @@ impl RNG {
 
     pub fn uniform<T, Range>(&mut self, range: Range) -> T
     where
-        Range: Into<rand::distributions::Uniform<T>>,
-        T: rand::distributions::uniform::SampleUniform,
+        Range: Into<distributions::Uniform<T>>,
+        T: distributions::uniform::SampleUniform,
     {
         range.into().sample(self.basic_rng_mut())
     }
 
     pub fn normal(&mut self, mean: f64, std: f64) -> f64 {
-        distributions::Normal::new(mean, std).sample(self.basic_rng_mut())
+        distributions::Normal::new(mean, std)
+            .expect("should get normal distribution")
+            .sample(self.basic_rng_mut())
     }
 
     pub fn binom(&mut self, n: usize, p: f64) -> usize {
         distributions::Binomial::new(n.try_into().expect("n fits into u64"), p)
+            .expect("should get binomial distribution")
             .sample(self.basic_rng_mut())
             .try_into()
             .expect("binom result fits into usize")

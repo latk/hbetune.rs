@@ -63,12 +63,12 @@ impl Kernel for Matern {
         let dists = cdist::cdist(x1.view(), x2.view());
 
         match self.nu {
-            nu if approx_eq!(f64, nu, 0.5) => (-dists).mapv(Float::exp),
-            nu if approx_eq!(f64, nu, 1.5) => {
+            nu if abs_diff_eq!(nu, 0.5) => (-dists).mapv(Float::exp),
+            nu if abs_diff_eq!(nu, 1.5) => {
                 let kernel: Array2<A> = dists * A::from_f(3.0.sqrt());
                 kernel.mapv(|k| (k + A::from_i(1)) * (-k).exp())
             }
-            nu if approx_eq!(f64, nu, 2.5) => {
+            nu if abs_diff_eq!(nu, 2.5) => {
                 // K = dists * sqrt(5)
                 let kernel: Array2<A> = dists * A::from_f(5.0.sqrt());
                 // (1 + K + K**2 / 3) * exp(-K)
@@ -99,7 +99,7 @@ impl Kernel for Matern {
         assert_eq!(d.shape(), &[x.nrows(), x.nrows(), self.n_params()]);
 
         let gradient = match self.nu {
-            nu if approx_eq!(f64, nu, 0.5) => {
+            nu if abs_diff_eq!(nu, 0.5) => {
                 let mut gradient = kernel.clone().insert_axis(Axis(2)) * &d
                     / d.sum_axis(Axis(2)).mapv(Float::sqrt).insert_axis(Axis(2));
                 gradient.map_inplace(|x| {
@@ -109,14 +109,14 @@ impl Kernel for Matern {
                 });
                 gradient
             }
-            nu if approx_eq!(f64, nu, 1.5) => {
+            nu if abs_diff_eq!(nu, 1.5) => {
                 // gradient = 3 * d * exp(-sqrt(3 * d.sum(-1)))[..., np.newaxis]
                 let tmp = d
                     .sum_axis(Axis(2))
                     .mapv(|d| Float::exp(-Float::sqrt(d * A::from_i(3))));
                 &d * &tmp.insert_axis(Axis(2)).broadcast(gradient_shape).unwrap() * A::from_i(3)
             }
-            nu if approx_eq!(f64, nu, 2.5) => {
+            nu if abs_diff_eq!(nu, 2.5) => {
                 let tmp: Array3<A> = (d.sum_axis(Axis(2)) * A::from_i(5))
                     .mapv(Float::sqrt)
                     .insert_axis(Axis(2));

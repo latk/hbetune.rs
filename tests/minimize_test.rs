@@ -1,11 +1,9 @@
-extern crate assert_cmd;
 extern crate ggtune;
 extern crate itertools;
 extern crate ndarray;
 extern crate noisy_float;
 extern crate serde_json;
 
-use assert_cmd::prelude::*;
 use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn, ParameterValue};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
@@ -272,10 +270,10 @@ fn rosenbrock_d2_integration() {
     run_integration_test(&[vec![1.0; 2].into()], 0.1, 0.0, |command| {
         command
             .arg("run")
-            .arg("--seed=19748")
-            .arg("--max-nevals=74")
-            .arg("--initial=25")
-            .arg("--popsize=7")
+            .arg("--seed=17928")
+            .arg("--max-nevals=90")
+            .arg("--initial=50")
+            .arg("--popsize=5")
             .arg("--param=x1 real -2.5 2.5")
             .arg("--param=x2 real -2.5 2.5")
             .args(&["function", "rosenbrock"]);
@@ -302,7 +300,7 @@ fn run_integration_test<Setup>(
 ) where
     Setup: Fn(&mut Command) -> (),
 {
-    let mut command = Command::cargo_bin("ggtune").unwrap();
+    let mut command = Command::new("target/debug/ggtune");
     setup(&mut command);
     let output = command
         .stdin(std::process::Stdio::null())

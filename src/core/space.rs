@@ -624,16 +624,16 @@ mod test {
         );
 
         assert!(
-            approx_eq!(f64, feature_min, 0.0),
+            abs_diff_eq!(feature_min, 0.0),
             "feature should reach min bound"
         );
         assert!(
-            approx_eq!(f64, feature_max, 1.0),
+            abs_diff_eq!(feature_max, 1.0),
             "feature should reach max bound"
         );
 
         assert!(
-            approx_eq!(f64, feature_mid, 0.5),
+            abs_diff_eq!(feature_mid, 0.5),
             "midpoint value should be midpoint of feature space"
         );
 
@@ -695,14 +695,14 @@ mod test {
             name: "foo".to_owned(),
         };
 
-        let feature_min = param.project_into_features(ParameterValue::Real(-1.0));
-        let feature_max = param.project_into_features(ParameterValue::Real(10.0));
+        let feature_min: f64 = param.project_into_features(ParameterValue::Real(-1.0));
+        let feature_max: f64 = param.project_into_features(ParameterValue::Real(10.0));
         assert!(
-            approx_eq!(f64, feature_min, 0.0),
+            abs_diff_eq!(feature_min, 0.0),
             "feature should reach min bound",
         );
         assert!(
-            approx_eq!(f64, feature_max, 1.0),
+            abs_diff_eq!(feature_max, 1.0),
             "feature should reach max bound",
         );
 
@@ -711,9 +711,9 @@ mod test {
             let feature = param.project_into_features(value);
             let roundtrip = param.project_from_features(feature);
             assert!(
-                approx_eq!(f64, roundtrip.into(), value.into()),
-                "must roundtrip for x={}",
-                x,
+                ulps_eq!(roundtrip.to_f64(), value.to_f64()),
+                "must roundtrip for x={}, but got {}",
+                x, roundtrip.to_f64(),
             );
             assert!(
                 0.0 <= feature && feature <= 1.0,
@@ -732,14 +732,14 @@ mod test {
             name: "foo".to_owned(),
         };
 
-        let feature_min = param.project_into_features(ParameterValue::Int(-1));
-        let feature_max = param.project_into_features(ParameterValue::Int(10));
+        let feature_min: f64 = param.project_into_features(ParameterValue::Int(-1));
+        let feature_max: f64 = param.project_into_features(ParameterValue::Int(10));
         assert!(
-            approx_eq!(f64, feature_min, 0.0),
+            abs_diff_eq!(feature_min, 0.0),
             "feature should reach min bound",
         );
         assert!(
-            approx_eq!(f64, feature_max, 1.0),
+            abs_diff_eq!(feature_max, 1.0),
             "feature should reach max bound",
         );
 
@@ -748,7 +748,7 @@ mod test {
             let feature = param.project_into_features(value);
             let roundtrip = param.project_from_features(feature);
             assert!(
-                approx_eq!(f64, roundtrip.into(), value.into()),
+                abs_diff_eq!(roundtrip.to_f64(), value.to_f64()),
                 "must roundtrip for x={}",
                 x,
             );

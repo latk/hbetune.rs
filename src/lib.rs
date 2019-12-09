@@ -1,10 +1,10 @@
 //! A Gaussian Process Guided Tuner
 
+#[macro_use]
+extern crate approx;
 extern crate csv;
 #[macro_use]
 extern crate failure;
-#[macro_use]
-extern crate float_cmp;
 extern crate itertools;
 extern crate ndarray;
 extern crate ndarray_stats;
@@ -16,10 +16,6 @@ extern crate serde;
 extern crate statrs;
 #[macro_use]
 extern crate structopt;
-
-#[cfg(test)]
-#[macro_use]
-extern crate approx;
 
 #[macro_use]
 mod util;
