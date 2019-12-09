@@ -713,7 +713,8 @@ mod test {
             assert!(
                 ulps_eq!(roundtrip.to_f64(), value.to_f64()),
                 "must roundtrip for x={}, but got {}",
-                x, roundtrip.to_f64(),
+                x,
+                roundtrip.to_f64(),
             );
             assert!(
                 0.0 <= feature && feature <= 1.0,
