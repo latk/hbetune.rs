@@ -108,7 +108,7 @@ struct CliBenchFunction {
     noise: f64,
 
     /// Name of the function.
-    /// (sphere, goldstein-price, easom, himmelblau, rastrigin, rosenbrock, onemax)
+    /// (sphere, goldstein-price, easom, himmelblau, rastrigin, rosenbrock, onemax, sum-abs)
     function: BenchFn,
 }
 
