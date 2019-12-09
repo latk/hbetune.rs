@@ -1,0 +1,56 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Cache cargo registry/index
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/index/
+        key: generic-cargo-registry-index
+
+    - name: Cache cargo registry/src
+      # The source files contain compilation artefacts, importantly OpenBLAS.
+      # It is not clear how the cache key should be calculated,
+      # particularly when OpenBLAS should be forced to rebuild.
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/src/
+        key: ${{ runner.os }}-cargo-registry-src
+
+    - name: Cache cargo build
+      uses: actions/cache@v1
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-build-target-
+
+    - name: Lint
+      run: make lint
+
+    - name: Compile Tests
+      run: make test-build
+
+    - name: Run Tests
+      run: make test
+
+    - name: Compile Release Binary
+      run: make release
+
+    - name: Upload Binary
+      uses: actions/upload-artifact@v1
+      with:
+        name: ggtune
+        path: target/release/ggtune
+
+    - name: Clean up target for caching
+      # Caching dependencies is more important than caching ggtune build artefacts.
+      run: find ./target/ -name 'ggtune*' -exec rm -rf {} +
+
