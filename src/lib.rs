@@ -5,8 +5,8 @@ extern crate csv;
 extern crate failure;
 #[macro_use]
 extern crate float_cmp;
-extern crate ndarray;
 extern crate itertools;
+extern crate ndarray;
 extern crate ndarray_stats;
 extern crate noisy_float;
 extern crate num_traits;

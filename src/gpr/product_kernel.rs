@@ -62,7 +62,7 @@ where
             if i2 < dim2a {
                 *unsafe { g1k2.uget([i0, i1, i2]) }
             } else {
-                *unsafe { g2k1.uget([i0, i1, i2 - dim2a])}
+                *unsafe { g2k1.uget([i0, i1, i2 - dim2a]) }
             }
         });
 
