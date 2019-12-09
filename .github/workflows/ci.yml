@@ -4,8 +4,8 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+
     steps:
     - uses: actions/checkout@v1
 
@@ -31,6 +31,9 @@ jobs:
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-build-target-
+
+    - name: Install dependencies
+      run: sudo apt install gfortran
 
     - name: Lint
       run: make lint
