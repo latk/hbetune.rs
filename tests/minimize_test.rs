@@ -216,8 +216,9 @@ fn easom_integration() {
             .arg("run")
             .arg("--seed=426")
             .arg("--max-nevals=100")
-            .arg("--initial=90")
+            .arg("--initial=85")
             .arg("--popsize=5")
+            .arg("--validation=5")
             .arg("--param=x1 real -50 50")
             .arg("--param=x2 real -50 50")
             .args(&["function", "easom"]);

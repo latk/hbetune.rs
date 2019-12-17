@@ -111,6 +111,10 @@ pub struct Minimizer {
     #[structopt(long, default_value = "10")]
     pub initial: usize,
 
+    /// How many samples are taken for validation of the optimum.
+    #[structopt(long, default_value = "1")]
+    pub validation: usize,
+
     /// How many samples may be taken in total per optimization run.
     #[structopt(long, default_value = "100")]
     pub max_nevals: usize,
@@ -169,6 +173,7 @@ impl Default for Minimizer {
         Self {
             popsize: 10,
             initial: 10,
+            validation: 1,
             max_nevals: 100,
             relscale_initial: 0.3,
             relscale_attenuation: 0.9,
@@ -234,11 +239,13 @@ impl Minimizer {
         } = args;
 
         assert!(
-            self.initial + self.popsize <= self.max_nevals,
-            "evaluation budget {max_nevals} too small with {initial}+n*{popsize} evaluations",
+            self.initial + self.validation <= self.max_nevals
+                && self.popsize <= self.max_nevals,
+            "evaluation budget {max_nevals} too small with {initial}+n*{popsize}+{validation} evaluations",
             max_nevals = self.max_nevals,
             initial = self.initial,
-            popsize = self.popsize
+            popsize = self.popsize,
+            validation = self.validation,
         );
 
         assert!(
@@ -306,7 +313,7 @@ where
 
         let mut population = self.make_initial_population(rng);
 
-        let mut budget = config.max_nevals;
+        let mut budget = config.max_nevals.saturating_sub(config.validation);
 
         let mut all_evalutions: Vec<Individual<A>> = Vec::new();
         let mut all_models: Vec<Estimator::Model> = Vec::new();
@@ -392,8 +399,13 @@ where
             fmin = find_fmin(all_evalutions.as_slice(), model).expect("fmin could be found");
         }
 
-        let (suggestion_location, suggestion_statistics) =
-            self.suggest_optimum(all_models.last().unwrap(), all_evalutions.as_slice());
+        let (suggestion_location, suggestion_statistics) = self.suggest_optimum(
+            all_models.last().unwrap(),
+            all_evalutions.as_slice(),
+            rng,
+            output,
+            generation + 1,
+        );
 
         Ok(OptimizationResult {
             all_individuals: all_evalutions,
@@ -554,17 +566,20 @@ where
     fn suggest_optimum<'a>(
         &'a self,
         model: &'a Estimator::Model,
-        individuals: impl IntoIterator<Item = &'a Individual<A>>,
+        individuals: &'a [Individual<A>],
+        rng: &mut RNG,
+        output: &mut Output<A>,
+        gen: u16,
     ) -> (Vec<ParameterValue>, SummaryStatistics<A>) {
-        let mut individuals = individuals.into_iter();
-        let mut suggestion = individuals
+        let mut individuals_iter = individuals.iter();
+        let mut suggestion = individuals_iter
             .next()
             .expect("should have at least one individual")
             .sample();
         let mut suggestion_y =
             model.predict_mean(self.space.project_into_features(suggestion).into());
 
-        for ind in individuals {
+        for ind in individuals_iter {
             let candidate_y =
                 model.predict_mean(self.space.project_into_features(ind.sample()).into());
             if candidate_y < suggestion_y {
@@ -591,6 +606,34 @@ where
         let suggestion = self
             .space
             .project_from_features(suggestion_features.clone());
+
+        let mut validation_sample = Individual::new(suggestion.clone());
+        validation_sample
+            .set_prediction_and_ei(A::from_f(0.), A::from_f(0.))
+            .expect("individual cannot have previous prediction");
+        let mut validation_samples = vec![validation_sample; self.config.validation];
+
+        self.evaluate_all(validation_samples.as_mut_slice(), rng, output, gen);
+
+        // combine new data with model, without refitting
+        let individuals = individuals
+            .into_iter()
+            .chain(&validation_samples)
+            .collect_vec();
+        let xs = self.space.project_into_features_array(
+            individuals
+                .iter()
+                .map(|ind| ind.sample())
+                .collect_vec()
+                .as_slice(),
+        );
+        let ys: Array1<A> = individuals
+            .iter()
+            .map(|ind| ind.observation().expect("individual has observation"))
+            .collect();
+        let newmodel = self.estimator.extend(xs, ys, model, rng);
+        let model = newmodel.as_ref().unwrap_or(model);
+
         let suggestion_statistics =
             model.predict_statistics(Array1::from(suggestion_features).mapv(A::from_f));
         (suggestion, suggestion_statistics)

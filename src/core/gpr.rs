@@ -269,6 +269,52 @@ impl<A: Scalar> Estimator<A> for EstimatorGPR {
             lml,
         })
     }
+
+    fn extend(
+        &self,
+        x: Array2<A>,
+        y: Array1<A>,
+        prior: &Self::Model,
+        _rng: &mut RNG,
+    ) -> Result<Self::Model, Self::Error> {
+        let (n_observations, _n_features) = x.dim();
+        assert!(
+            y.len() == n_observations,
+            "expected y values for {} observations: {}",
+            n_observations,
+            y
+        );
+        let (y_train, y_norm) = YNormalize::new_project_into_normalized(
+            y,
+            self.y_projection,
+            self.known_optimum.map(A::from_f),
+        );
+        let x_train = x;
+
+        let FittedKernel {
+            kernel,
+            noise,
+            alpha,
+            k_inv,
+            lml,
+        } = FittedKernel::extend(
+            prior.kernel.clone(),
+            x_train.clone(),
+            y_train.clone(),
+            prior.noise.clone(),
+        );
+
+        Ok(SurrogateModelGPR {
+            kernel,
+            noise,
+            x_train,
+            y_train,
+            alpha,
+            k_inv,
+            y_norm,
+            lml,
+        })
+    }
 }
 
 #[derive(Debug)]

@@ -68,6 +68,8 @@ Minimizer options:
 * **`--initial N`**:
   how may initial samples should be evaluated
   before model-guided acquisition takes over (default 10).
+* **`--validation N`**:
+  how many samples are taken for validation of the optimum (default 1).
 * **`--max-nevals N`**:
   how many samples may be evaluated in total (default 100).
 * **`--relscale-initial STD`**:

@@ -29,6 +29,43 @@ impl<K, A> FittedKernel<K, A> {
     {
         fit_kernel(kernel, x_train, y_train, rng, n_restarts_optimizer, noise)
     }
+
+    pub fn extend(
+        kernel: K,
+        x_train: Array2<A>,
+        y_train: Array1<A>,
+        noise: BoundedValue<f64>,
+    ) -> Self
+    where
+        A: Scalar,
+        K: Kernel,
+    {
+        let LmlWithGradient {
+            lml,
+            lml_gradient: _,
+            alpha,
+            factorization,
+        } = match LmlWithGradient::of(
+            kernel.clone(),
+            A::from_f(noise.value()),
+            x_train.view(),
+            y_train.view(),
+        ) {
+            Some(result) => result,
+            None => panic!("Kernel matrix must be invertible."),
+        };
+
+        // Precompute arrays needed at prediction.
+        use ndarray_linalg::cholesky::*;
+        let k_inv = factorization.invc_into().unwrap();
+        FittedKernel {
+            kernel,
+            noise,
+            alpha,
+            k_inv,
+            lml,
+        }
+    }
 }
 
 fn fit_kernel<K: Kernel, A: Scalar>(

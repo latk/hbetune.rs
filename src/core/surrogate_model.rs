@@ -18,6 +18,15 @@ pub trait Estimator<A: Scalar> {
         prior: Option<&Self::Model>,
         rng: &mut RNG,
     ) -> Result<Self::Model, Self::Error>;
+
+    /// Extend a model with new data, without re-fitting.
+    fn extend(
+        &self,
+        x: Array2<A>,
+        y: Array1<A>,
+        prior: &Self::Model,
+        rng: &mut RNG,
+    ) -> Result<Self::Model, Self::Error>;
 }
 
 /// A regression model to predict the value of points.
