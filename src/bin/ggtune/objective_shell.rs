@@ -24,10 +24,10 @@ impl<A> ggtune::ObjectiveFunction<A> for RunCommandAsObjective
 where
     A: Copy + FromStr + std::fmt::Display,
 {
-    fn run<'a>(&self, xs: &[ggtune::ParameterValue], _rng: &'a mut ggtune::RNG) -> (A, A) {
+    fn run<'a>(&self, xs: &[ggtune::ParameterValue], rng: &'a mut ggtune::RNG) -> (A, A) {
         let template = self.cli_template.iter().map(String::as_ref).collect_vec();
-
-        run_command_as_objective(&self.space, template.as_slice(), xs)
+        let seed = rng.uniform(0..=u32::max_value());
+        run_command_as_objective(&self.space, template.as_slice(), xs, seed)
     }
 }
 
@@ -35,11 +35,13 @@ fn run_command_as_objective<A>(
     space: &Space,
     template: &[&str],
     xs: &[ggtune::ParameterValue],
+    seed: u32,
 ) -> (A, A)
 where
     A: Copy + FromStr + std::fmt::Display,
 {
-    let args = collect_xs_as_hash(space, xs);
+    let mut args = collect_xs_as_hash(space, xs);
+    args.insert("SEED".to_owned(), seed.to_string());
     let cmd_args = apply_template(template, &args)
         .expect("filling in objective command placeholders must succeed");
     let mut cmd_args = cmd_args.iter().map(AsRef::<OsStr>::as_ref);
@@ -69,15 +71,15 @@ where
         .unwrap()
 }
 
-fn collect_xs_as_hash<A>(space: &Space, xs: &[A]) -> HashMap<String, A>
+fn collect_xs_as_hash<A>(space: &Space, xs: &[A]) -> HashMap<String, String>
 where
-    A: Copy,
+    A: Copy + std::fmt::Display,
 {
     space
         .params()
         .iter()
         .zip_eq(xs)
-        .map(|(param, x)| (param.name().to_owned(), *x))
+        .map(|(param, &x)| (param.name().to_owned(), x.to_string()))
         .collect()
 }
 

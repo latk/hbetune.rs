@@ -124,6 +124,7 @@ Objective function:
   other output is ignored.
   Parameters can be interpolated into the arguments by name,
   e.g. `./objective "{x1}" --param={x2}`.
+  Additionally, the `SEED` variable inserts a random 32-bit unsigned integer value.
 
 * **`function [--noise=STD] NAME`**:
   use a built-in benchmark function as the objective function,
