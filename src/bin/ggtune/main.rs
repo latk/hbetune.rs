@@ -314,8 +314,12 @@ where
         .collect_vec();
     let suggestion_statistics = result.suggestion_statistics();
 
+    if !quiet {
+        print!("optimization result: ");
+    }
+
     println!(
-        "optimization result: {:#}",
+        "{:#}",
         json!({
             "location": suggestion_location,
             "mean": suggestion_statistics.mean(),
