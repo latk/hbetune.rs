@@ -233,6 +233,16 @@ impl Space {
     }
 }
 
+#[test]
+fn test_space_sample_n_0() {
+    let mut rng = RNG::new_with_seed(1234);
+    let mut space = Space::new();
+    space.add_integer_parameter("x", 1, 100);
+    let sample = space.sample_n(0, &mut rng);
+    let expected: Vec<Vec<_>> = vec![];
+    assert_eq!(&sample, &expected, "can take zero samples");
+}
+
 fn sample_truncnorm(mu: f64, sigma: f64, a: f64, b: f64, rng: &mut RNG) -> f64 {
     use statrs::distribution::{InverseCDF, Normal, Univariate};
 
@@ -456,6 +466,11 @@ impl Parameter {
 }
 
 fn sample_n_in_unit_range(n: usize, rng: &mut RNG) -> Vec<f64> {
+    // trivial case:
+    if n == 0 {
+        return vec![];
+    }
+
     let bounds = (0..n).map(|x| x as f64 / n as f64).collect_vec();
 
     let last_window = bounds.last().cloned().unwrap_or(0.0)..=1.0;
@@ -472,6 +487,14 @@ fn sample_n_in_unit_range(n: usize, rng: &mut RNG) -> Vec<f64> {
         .map(|(&window_lo, &window_hi)| rng.uniform(window_lo..window_hi));
 
     n_minus_one_items.chain(last_item).collect_vec()
+}
+
+#[test]
+fn test_sample_unit_range() {
+    let mut rng = RNG::new_with_seed(9532);
+    assert_eq!(sample_n_in_unit_range(0, &mut rng), vec![], "sample n=0");
+    assert_eq!(sample_n_in_unit_range(1, &mut rng).len(), 1, "sample n=1");
+    assert_eq!(sample_n_in_unit_range(35, &mut rng).len(), 35, "sample n=35");
 }
 
 macro_rules! with_error_context {
