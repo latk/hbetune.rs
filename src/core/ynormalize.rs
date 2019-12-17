@@ -159,10 +159,14 @@ impl<A> YNormalize<A>
 where
     A: crate::Scalar,
 {
-    pub fn new_project_into_normalized(y: Array1<A>, projection: Projection) -> (Array1<A>, Self) {
+    pub fn new_project_into_normalized(
+        y: Array1<A>,
+        projection: Projection,
+        known_optimum: Option<A>,
+    ) -> (Array1<A>, Self) {
         match projection {
             Projection::Linear => {
-                let expected = guess_min(y.view(), A::from_i(0));
+                let expected = guess_min(known_optimum, y.view(), A::from_i(0));
                 let y = y - expected;
                 let amplitude = guess_amplitude(y.view());
                 let y = y / amplitude + A::from_f(FUDGE_MIN);
@@ -175,7 +179,7 @@ where
                 (y, cfg)
             }
             Projection::Logarithmic => {
-                let expected = guess_min(y.view(), A::from_f(1.0));
+                let expected = guess_min(known_optimum, y.view(), A::from_f(1.0));
                 let y = logwarp::project_into(y - expected);
                 let amplitude = guess_amplitude(y.view());
                 let y = y / amplitude;
@@ -284,11 +288,19 @@ where
 }
 
 /// select a value so that all ys can be made non-negative
-fn guess_min<A>(y: ArrayView1<A>, minimum: A) -> A
+fn guess_min<A>(known_optimum: Option<A>, y: ArrayView1<A>, minimum: A) -> A
 where
     A: crate::Scalar,
 {
-    *y.min().expect("minimum should exist") - minimum
+    let min = *y.min().expect("minimum should exist") - minimum;
+
+    if let Some(known_optimum) = known_optimum {
+        if known_optimum < min {
+            return known_optimum;
+        }
+    }
+
+    min
 }
 
 /// select a value so that the mean can be normalized to 1, as long as any deviation exists
@@ -311,47 +323,60 @@ where
 mod tests {
     use super::*;
 
-    fn test_inverse(input: impl Into<Array1<f64>>, projection: Projection) {
+    fn test_inverse(
+        input: impl Into<Array1<f64>>,
+        projection: Projection,
+        known_optimum: Option<f64>,
+    ) {
         let input = input.into();
-        let (y, norm) = YNormalize::new_project_into_normalized(input.clone(), projection);
+        let (y, norm) =
+            YNormalize::new_project_into_normalized(input.clone(), projection, known_optimum);
         let rey = norm.project_into_normalized(input.clone());
         let result = norm.project_location_from_normalized(y.clone());
         assert!(
             abs_diff_eq!(input, &result, epsilon = 1e-4),
             "result should be close to input\n\
              input : {}\n\
-             result: {}",
+             result: {}\n\
+             optimum: {:?}",
             input,
-            result
+            result,
+            known_optimum
         );
         assert!(
             abs_diff_eq!(y, &rey, epsilon = 1e-4),
             "project_into variants should produce same result\n\
              new_project_into_normalized : {}\n\
-             norm.project_into_normalized: {}",
+             norm.project_into_normalized: {}\n\
+             optimum: {:?}",
             y,
-            rey
+            rey,
+            known_optimum
         );
     }
 
     #[test]
     fn linear_has_an_inverse_operation() {
-        test_inverse(vec![1., 2., 3., 4.], Projection::Linear);
+        test_inverse(vec![1., 2., 3., 4.], Projection::Linear, None);
+        test_inverse(vec![1., 2., 3., 4.], Projection::Linear, Some(0.));
     }
 
     #[test]
     fn logarithmic_has_an_inverse_operation() {
-        test_inverse(vec![1., 2., 3., 4.], Projection::Logarithmic);
+        test_inverse(vec![1., 2., 3., 4.], Projection::Logarithmic, None);
+        test_inverse(vec![1., 2., 3., 4.], Projection::Logarithmic, Some(0.));
     }
 
     #[test]
     fn linear_also_works_with_negative_numbers() {
-        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear);
+        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear, None);
+        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear, Some(0.));
     }
 
     #[test]
     fn logarithmic_also_works_with_negative_numbers() {
-        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear);
+        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear, None);
+        test_inverse(vec![-5., 3., 8., -2.], Projection::Linear, Some(0.));
     }
 
     #[test]
@@ -440,7 +465,8 @@ mod tests {
         let expected_std = data.population_std_dev();
         let expected_cv = expected_std / expected_mean;
 
-        let (transformed, norm) = YNormalize::new_project_into_normalized(data.clone(), projection);
+        let (transformed, norm) =
+            YNormalize::new_project_into_normalized(data.clone(), projection, None);
 
         let transformed_mean = transformed.mean().expect("mean must exist");
         let transformed_variance = transformed.population_variance();

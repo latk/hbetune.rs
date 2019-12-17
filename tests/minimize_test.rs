@@ -188,6 +188,23 @@ fn goldstein_price_logy_integration() {
     });
 }
 
+#[test]
+fn goldstein_price_logy_knownoptimum_integration() {
+    run_integration_test(&[array![0.0, -1.0]], 0.02, 3.0, |command| {
+        command
+            .arg("run")
+            .arg("--seed=11073")
+            .arg("--max-nevals=72")
+            .arg("--initial=30")
+            .arg("--popsize=7")
+            .arg("--transform-objective=log")
+            .arg("--known-optimum=0")
+            .arg("--param=x1 real -2 2")
+            .arg("--param=x2 real -2 2")
+            .args(&["function", "goldstein-price"]);
+    });
+}
+
 /// The Easom test doesn't really have any chance of heuristically finding the optimum,
 /// so that we put most points into exploration
 /// and allow any recommendation point as “correct” result.

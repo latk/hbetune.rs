@@ -446,7 +446,10 @@ where
         rng: &mut RNG,
         output: &mut Output<A>,
     ) -> Result<Estimator::Model, Estimator::Error> {
-        assert!(individuals.len() > 0, "fit_next_model() requires at least one individual");
+        assert!(
+            individuals.len() > 0,
+            "fit_next_model() requires at least one individual"
+        );
         let timer = self.time_source.as_ref()();
 
         use ndarray::prelude::*;

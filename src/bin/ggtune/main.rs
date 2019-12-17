@@ -58,6 +58,13 @@ struct CliCommandRun {
     #[structopt(long, default_value = "linear")]
     transform_objective: ggtune::Projection,
 
+    /// Known optimum (lower bound) for the objective value.
+    /// Serves as a bias for the surrogate model.
+    /// Example: the known optimum of an objective representing a distance is at least zero.
+    /// By default, a lower bound is inferred.
+    #[structopt(long)]
+    known_optimum: Option<f64>,
+
     /// Whether 32-bit numbers should be used. Faster, but has numeric stability problems.
     #[structopt(long)]
     use_32: bool,
@@ -252,6 +259,7 @@ where
         minimizer,
         objective,
         transform_objective,
+        known_optimum,
         use_32: _use_32,
         write_csv,
     } = cfg;
@@ -287,8 +295,13 @@ where
             .add_csv_writer(opened_csv_file.as_mut().unwrap(), &space)?;
     }
 
-    args.estimator =
-        Some(<EstimatorGPR as Estimator<A>>::new(&space).y_projection(transform_objective));
+    let mut estimator = <EstimatorGPR as Estimator<A>>::new(&space);
+    estimator = estimator.y_projection(transform_objective);
+    if let Some(known_optimum) = known_optimum {
+        estimator = estimator.known_optimum(known_optimum);
+    }
+
+    args.estimator = Some(estimator);
 
     let result = minimizer
         .minimize(objective.as_ref(), space.clone(), &mut rng, args)

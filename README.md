@@ -48,6 +48,11 @@ General options:
     which can help with many target functions.
     However, interpretation of the internal model becomes more difficult.
     The data is rescaled internally so that it can handle negative values.
+* **`--known-optimum OBJECTIVE`**:
+  Known optimum (lower bound) for the objective value.
+  Serves as a bias for the surrogate model.
+  Example: the known optimum of an objective representing a distance is at least zero.
+  By default, a lower bound is inferred.
 * **`--use-32`**:
   use 32-bit floats internally.
   Leads to numeric stability problems.

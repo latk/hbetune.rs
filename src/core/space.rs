@@ -494,7 +494,11 @@ fn test_sample_unit_range() {
     let mut rng = RNG::new_with_seed(9532);
     assert_eq!(sample_n_in_unit_range(0, &mut rng), vec![], "sample n=0");
     assert_eq!(sample_n_in_unit_range(1, &mut rng).len(), 1, "sample n=1");
-    assert_eq!(sample_n_in_unit_range(35, &mut rng).len(), 35, "sample n=35");
+    assert_eq!(
+        sample_n_in_unit_range(35, &mut rng).len(),
+        35,
+        "sample n=35"
+    );
 }
 
 macro_rules! with_error_context {
