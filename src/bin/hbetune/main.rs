@@ -1,4 +1,4 @@
-extern crate ggtune;
+extern crate hbetune;
 extern crate strfmt;
 #[macro_use]
 extern crate structopt;
@@ -30,7 +30,7 @@ struct CliApp {
 
 #[derive(Debug, StructOpt)]
 enum CliCommand {
-    /// Run the ggtune minimizer.
+    /// Run the hbetune minimizer.
     #[structopt(name = "run")]
     Run(CliCommandRun),
 
@@ -45,18 +45,18 @@ enum CliCommand {
 struct CliCommandRun {
     /// Dimensions for the space. Should have form '<name> real <lo> <hi>'.
     #[structopt(long, min_values = 1, number_of_values = 1)]
-    param: Vec<ggtune::Parameter>,
+    param: Vec<hbetune::Parameter>,
 
     /// Random number generator seed for reproducible runs.
     #[structopt(long, default_value = "7861")]
     seed: usize,
 
     #[structopt(flatten)]
-    minimizer: ggtune::Minimizer,
+    minimizer: hbetune::Minimizer,
 
     /// How the objective value should be transformed (lin/linear or log/ln/logarithmic).
     #[structopt(long, default_value = "linear")]
-    transform_objective: ggtune::Projection,
+    transform_objective: hbetune::Projection,
 
     /// Known optimum (lower bound) for the objective value.
     /// Serves as a bias for the surrogate model.
@@ -122,8 +122,8 @@ struct CliBenchFunction {
 impl CliObjective {
     fn into_objective<'a, A>(
         self,
-        space: &ggtune::Space,
-    ) -> Box<dyn ggtune::ObjectiveFunction<A> + 'a>
+        space: &hbetune::Space,
+    ) -> Box<dyn hbetune::ObjectiveFunction<A> + 'a>
     where
         A: ObjectiveValue,
         f64: num_traits::AsPrimitive<A>,
@@ -185,13 +185,13 @@ where
 impl ObjectiveValue for f32 {}
 impl ObjectiveValue for f64 {}
 
-impl<A> ggtune::ObjectiveFunction<A> for CliBenchFunction
+impl<A> hbetune::ObjectiveFunction<A> for CliBenchFunction
 where
     A: ObjectiveValue,
     f64: num_traits::AsPrimitive<A>,
 {
-    fn run(&self, xs: &[ggtune::ParameterValue], rng: &mut ggtune::RNG) -> (A, A) {
-        use ggtune::benchfn;
+    fn run(&self, xs: &[hbetune::ParameterValue], rng: &mut hbetune::RNG) -> (A, A) {
+        use hbetune::benchfn;
         use num_traits::AsPrimitive as _;
 
         let xs = xs.iter().map(|&x| (x.to_f64().as_())).collect_vec();
@@ -248,10 +248,10 @@ fn main() {
 
 fn command_run<A>(cfg: CliCommandRun, quiet: bool) -> Result<(), failure::Error>
 where
-    A: ggtune::Scalar + ObjectiveValue,
+    A: hbetune::Scalar + ObjectiveValue,
     f64: num_traits::AsPrimitive<A>,
 {
-    use ggtune::{Estimator, EstimatorGPR, MinimizerArgs, ObjectiveFunction};
+    use hbetune::{Estimator, EstimatorGPR, MinimizerArgs, ObjectiveFunction};
 
     let CliCommandRun {
         param: params,
@@ -269,12 +269,12 @@ where
         "Option --param must be provided at least once"
     );
 
-    let mut space = ggtune::Space::new();
+    let mut space = hbetune::Space::new();
     for param in params {
         space.add_parameter(param.clone());
     }
 
-    let mut rng = ggtune::RNG::new_with_seed(seed);
+    let mut rng = hbetune::RNG::new_with_seed(seed);
 
     let objective: Box<dyn ObjectiveFunction<A>> = objective.into_objective(&space);
 
@@ -315,12 +315,12 @@ where
             json!({
                 "name": param.name(),
                 "type": match value {
-                    ggtune::ParameterValue::Real(_) => "real",
-                    ggtune::ParameterValue::Int(_) => "int",
+                    hbetune::ParameterValue::Real(_) => "real",
+                    hbetune::ParameterValue::Int(_) => "int",
                 },
                 "value": match value {
-                    ggtune::ParameterValue::Real(x) => json!(x),
-                    ggtune::ParameterValue::Int(x) => json!(x),
+                    hbetune::ParameterValue::Real(x) => json!(x),
+                    hbetune::ParameterValue::Int(x) => json!(x),
                 },
             })
         })
@@ -356,10 +356,10 @@ fn command_function(function: CliCommandFunction) -> Result<(), failure::Error> 
     } = function;
 
     let sample = args.into_iter().map(Into::into).collect_vec();
-    let mut rng = ggtune::RNG::new_with_seed(seed);
+    let mut rng = hbetune::RNG::new_with_seed(seed);
 
     let (value, _cost): (f64, f64) =
-        ggtune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
+        hbetune::ObjectiveFunction::run(&function, sample.as_slice(), &mut rng);
 
     println!("{}", value);
 

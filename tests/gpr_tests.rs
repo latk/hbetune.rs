@@ -1,11 +1,11 @@
-extern crate ggtune;
+extern crate hbetune;
 extern crate ndarray;
 #[macro_use]
 extern crate itertools;
 #[macro_use]
 extern crate approx;
 
-use ggtune::{Estimator as _, EstimatorGPR, Space, SurrogateModel as _, SurrogateModelGPR, RNG};
+use hbetune::{Estimator as _, EstimatorGPR, Space, SurrogateModel as _, SurrogateModelGPR, RNG};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 
@@ -86,7 +86,7 @@ mod describe_gpr {
             let xs = array![0.1, 0.5, 0.5, 0.9].insert_axis(Axis(1));
             let ys = array![1.0, 1.8, 2.2, 3.0];
             let space = make_space();
-            let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+            let model = <hbetune::EstimatorGPR as hbetune::Estimator<f64>>::new(&space)
                 .estimate(xs, ys, None, &mut RNG::new_with_seed(123))
                 .unwrap();
             SimpleModel { space, model }
@@ -138,7 +138,7 @@ mod describe_gpr {
             let xs = array![0.3, 0.5, 0.7].insert_axis(Axis(1));
             let ys = array![1.0, 2.0, 1.5];
             let space = make_space();
-            let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+            let model = <hbetune::EstimatorGPR as hbetune::Estimator<f64>>::new(&space)
                 .noise_bounds(1e-5, 1e0)
                 .length_scale_bounds(vec![(0.1, 1.0)])
                 .estimate(xs, ys, None, &mut RNG::new_with_seed(9372))
@@ -172,7 +172,7 @@ mod describe_gpr {
 
     #[test]
     fn works_in_1d() {
-        use ggtune::benchfn::sphere;
+        use hbetune::benchfn::sphere;
 
         let xs = Array::linspace(-2.0, 2.0, 5).into_shape((5, 1)).unwrap();
         let ys: Array1<_> = xs.outer_iter().map(sphere).collect();
@@ -180,7 +180,7 @@ mod describe_gpr {
 
         let mut space = Space::new();
         space.add_real_parameter("x1", -2.0, 2.0);
-        let model = <ggtune::EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+        let model = <hbetune::EstimatorGPR as hbetune::Estimator<f64>>::new(&space)
             .length_scale_bounds(vec![(1e-2, 1e1)])
             .noise_bounds(1e-2, 1e1)
             .estimate(xs.clone(), ys, None, &mut RNG::new_with_seed(4531))
@@ -299,7 +299,7 @@ parametrize!(it_works_in_2d(
 ));
 
 fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmode: &str) {
-    use ggtune::benchfn::sphere;
+    use hbetune::benchfn::sphere;
 
     let mut rng = RNG::new_with_seed(rng_seed);
 
@@ -334,7 +334,7 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
         space.add_real_parameter("x", -2.0, 2.0);
         space.add_real_parameter("y", -2.0, 2.0);
 
-        <EstimatorGPR as ggtune::Estimator<f64>>::new(&space)
+        <EstimatorGPR as hbetune::Estimator<f64>>::new(&space)
             .length_scale_bounds(vec![(1e-2, 2e1); 2])
             .noise_bounds(1e-2, 1e1)
             .n_restarts_optimizer(1)

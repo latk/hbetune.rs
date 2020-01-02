@@ -1,5 +1,5 @@
 [package]
-name = "ggtune"
+name = "hbetune"
 version = "0.1.0"
 authors = ["Lukas Atkinson"]
 edition = "2018"

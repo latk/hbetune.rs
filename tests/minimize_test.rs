@@ -1,18 +1,18 @@
-extern crate ggtune;
+extern crate hbetune;
 extern crate itertools;
 extern crate ndarray;
 extern crate noisy_float;
 extern crate serde_json;
 
-use ggtune::{EstimatorGPR, ObjectiveFunctionFromFn, ParameterValue};
+use hbetune::{EstimatorGPR, ObjectiveFunctionFromFn, ParameterValue};
 use itertools::Itertools as _;
 use ndarray::prelude::*;
 use serde_json::json;
 use std::process::Command;
 
-fn sphere_objective<A: ggtune::Scalar>(xs: &[ParameterValue]) -> A {
+fn sphere_objective<A: hbetune::Scalar>(xs: &[ParameterValue]) -> A {
     let xs_array = xs.iter().cloned().map(Into::<f64>::into).collect_vec();
-    let y: f64 = ggtune::benchfn::sphere(Array::from(xs_array));
+    let y: f64 = hbetune::benchfn::sphere(Array::from(xs_array));
     A::from_f(y)
 }
 
@@ -318,7 +318,7 @@ fn run_integration_test<Setup>(
 ) where
     Setup: Fn(&mut Command) -> (),
 {
-    let mut command = Command::new("target/debug/ggtune");
+    let mut command = Command::new("target/debug/hbetune");
     setup(&mut command);
     let output = command
         .stdin(std::process::Stdio::null())
@@ -374,18 +374,19 @@ fn run_minimize_test<A, Model, ObjectiveFn, SetupFn>(
     max_distance: f64,
     setup: SetupFn,
 ) where
-    A: ggtune::Scalar,
-    Model: ggtune::Estimator<A>,
-    ObjectiveFn: ggtune::ObjectiveFunction<A>,
-    SetupFn: Fn(&mut ggtune::Space, &mut ggtune::Minimizer, &mut ggtune::MinimizerArgs<A, Model>),
+    A: hbetune::Scalar,
+    Model: hbetune::Estimator<A>,
+    ObjectiveFn: hbetune::ObjectiveFunction<A>,
+    SetupFn:
+        Fn(&mut hbetune::Space, &mut hbetune::Minimizer, &mut hbetune::MinimizerArgs<A, Model>),
 {
     assert!(!ideal.is_empty(), "a slice of ideal points is required");
 
-    let mut rng = ggtune::RNG::new_with_seed(rng_seed);
+    let mut rng = hbetune::RNG::new_with_seed(rng_seed);
 
-    let mut minimizer = ggtune::Minimizer::default();
-    let mut space = ggtune::Space::new();
-    let mut args = ggtune::MinimizerArgs::default();
+    let mut minimizer = hbetune::Minimizer::default();
+    let mut space = hbetune::Space::new();
+    let mut args = hbetune::MinimizerArgs::default();
     setup(&mut space, &mut minimizer, &mut args);
     // args.output
     //     .add_human_readable_individuals(std::io::stderr(), &space);

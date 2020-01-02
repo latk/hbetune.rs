@@ -1,5 +1,5 @@
 use failure::ResultExt as _;
-use ggtune::Space;
+use hbetune::Space;
 use itertools::Itertools as _;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -20,11 +20,11 @@ impl RunCommandAsObjective {
     }
 }
 
-impl<A> ggtune::ObjectiveFunction<A> for RunCommandAsObjective
+impl<A> hbetune::ObjectiveFunction<A> for RunCommandAsObjective
 where
     A: Copy + FromStr + std::fmt::Display,
 {
-    fn run<'a>(&self, xs: &[ggtune::ParameterValue], rng: &'a mut ggtune::RNG) -> (A, A) {
+    fn run<'a>(&self, xs: &[hbetune::ParameterValue], rng: &'a mut hbetune::RNG) -> (A, A) {
         let template = self.cli_template.iter().map(String::as_ref).collect_vec();
         let seed = rng.uniform(0..=u32::max_value());
         run_command_as_objective(&self.space, template.as_slice(), xs, seed)
@@ -34,7 +34,7 @@ where
 fn run_command_as_objective<A>(
     space: &Space,
     template: &[&str],
-    xs: &[ggtune::ParameterValue],
+    xs: &[hbetune::ParameterValue],
     seed: u32,
 ) -> (A, A)
 where

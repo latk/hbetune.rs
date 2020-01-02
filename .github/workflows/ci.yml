@@ -50,10 +50,10 @@ jobs:
     - name: Upload Binary
       uses: actions/upload-artifact@v1
       with:
-        name: ggtune
-        path: target/release/ggtune
+        name: hbetune
+        path: target/release/hbetune
 
     - name: Clean up target for caching
-      # Caching dependencies is more important than caching ggtune build artefacts.
-      run: find ./target/ -name 'ggtune*' -exec rm -rf {} +
+      # Caching dependencies is more important than caching hbetune build artefacts.
+      run: find ./target/ -name 'hbetune*' -exec rm -rf {} +
 

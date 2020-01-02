@@ -113,9 +113,9 @@ fn fail_if_some<T>(maybe: Option<T>) -> Result<(), ()> {
 ///
 /// ```
 /// # #[macro_use] extern crate ndarray;
-/// # extern crate ggtune;
+/// # extern crate hbetune;
 /// # use ndarray::prelude::*;
-/// # use ggtune::Individual;
+/// # use hbetune::Individual;
 /// let mut ind: Individual<f64> = Individual::new(
 ///     vec![1.0.into(), 2.0.into(), 3.0.into()],
 /// );

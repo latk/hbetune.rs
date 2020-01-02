@@ -10,7 +10,7 @@ use num_traits::{Float, FloatConst};
 ///
 /// ```
 /// # #[macro_use] extern crate ndarray;
-/// # use ggtune::benchfn::*;
+/// # use hbetune::benchfn::*;
 /// assert_eq!(sphere(array![0.0]), 0.0);
 /// assert_eq!(sphere(array![0.0, 0.0]), 0.0);
 /// assert_eq!(sphere(array![1.0, 2.0]), 5.0);
@@ -32,7 +32,7 @@ where
 /// Optimum: f(0, -1) = 3
 ///
 /// ```
-/// # use ggtune::benchfn::goldstein_price;
+/// # use hbetune::benchfn::goldstein_price;
 /// assert_eq!(goldstein_price(0.0f64, -1.0), 3.0);
 /// assert_eq!(goldstein_price(0.0f32, -1.0), 3.0);
 /// ```
@@ -65,7 +65,7 @@ where
 ///
 /// ```
 /// # #[macro_use] extern crate approx;
-/// # use ggtune::benchfn::easom;
+/// # use hbetune::benchfn::easom;
 /// # fn main() {
 /// const PI32: f32 = std::f32::consts::PI;
 /// const PI64: f64 = std::f64::consts::PI;
@@ -93,7 +93,7 @@ where
 /// Bounds: -5 <= xi <= 5
 ///
 /// ```
-/// # use ggtune::benchfn::himmelblau;
+/// # use hbetune::benchfn::himmelblau;
 /// # #[macro_use] extern crate approx;
 /// # fn main() {
 /// assert!(abs_diff_eq!(himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "min 1");
@@ -120,7 +120,7 @@ where
 /// ```
 /// # #[macro_use] extern crate ndarray;
 /// # use ndarray::prelude::*;
-/// # use ggtune::benchfn::rastrigin;
+/// # use hbetune::benchfn::rastrigin;
 /// # fn main() {
 /// assert_eq!(rastrigin(array![0.0f32], 10.0), 0.0, "minimum in 1D as f32");
 /// assert_eq!(rastrigin(array![0.0f64], 10.0), 0.0, "minimum in 1D as f64");
@@ -133,7 +133,7 @@ where
 ///
 /// ``` should_panic
 /// # #[macro_use] extern crate ndarray;
-/// # use ggtune::benchfn::rastrigin;
+/// # use hbetune::benchfn::rastrigin;
 /// # fn main() {
 /// rastrigin(array![], 10.0);  // panics
 /// # }
@@ -162,7 +162,7 @@ where
 /// ```
 /// # #[macro_use] extern crate ndarray;
 /// # use ndarray::prelude::*;
-/// # use ggtune::benchfn::rosenbrock;
+/// # use hbetune::benchfn::rosenbrock;
 /// # fn main() {
 /// assert_eq!(rosenbrock(array![1.0, 1.0]), 0.0);
 /// assert_eq!(rosenbrock(Array::from(vec![1.0; 6])), 0.0);
@@ -173,7 +173,7 @@ where
 ///
 /// ``` should_panic
 /// # #[macro_use] extern crate ndarray;
-/// # use ggtune::benchfn::rosenbrock;
+/// # use hbetune::benchfn::rosenbrock;
 /// # fn main() {
 /// rosenbrock(array![0.0]);  // panics
 /// # }
@@ -212,7 +212,7 @@ where
 ///
 /// ```
 /// # extern crate ndarray;
-/// # use ggtune::benchfn::onemax;
+/// # use hbetune::benchfn::onemax;
 /// # use ndarray::prelude::*;
 /// assert_eq!(onemax(Array::from(vec![0.0f32; 1])), 0.0, "optimum for f32 1D");
 /// assert_eq!(onemax(Array::from(vec![0.0f64; 1])), 0.0, "optimum for f64 1D");

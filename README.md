@@ -1,13 +1,13 @@
-# ggtune
+# hbetune
 
-The ggtune tool is a global optimization engine
+The hbetune tool is a global optimization engine
 for expensive, noisy, black-box functions.
 It uses a hybrid algorithm combining Bayesian Optimization
 and Evolutionary Algorithms.
 
-## `ggtune`
+## `hbetune`
 
-Usage: `ggtune [OPTIONS] COMMAND ...`
+Usage: `hbetune [OPTIONS] COMMAND ...`
 
 Options:
 
@@ -19,12 +19,12 @@ Options:
 Commands:
 
 * **`help`**: show a help help message.
-* **`run`**: run the ggtune minimizer.
+* **`run`**: run the hbetune minimizer.
 * **`function`**: evaluate a built-in benchmark function.
 
-## `ggtune run`
+## `hbetune run`
 
-Usage: `ggtune run [OPTIONS] OBJECTIVE ...`
+Usage: `hbetune run [OPTIONS] OBJECTIVE ...`
 
 Run the minimizer.
 This requires defining the objective function that shall be optimized,
@@ -135,11 +135,11 @@ Objective function:
 
 * **`function [--noise=STD] NAME`**:
   use a built-in benchmark function as the objective function,
-  see `ggtune function`.
+  see `hbetune function`.
 
-## `ggtune function`
+## `hbetune function`
 
-Usage: `ggtune function [OPTIONS] NAME ARGS...`
+Usage: `hbetune function [OPTIONS] NAME ARGS...`
 
 Evaluate an example function at the location given by ARGS,
 and possibly add noise.
@@ -175,4 +175,4 @@ is resolved).
 Therefore:
 
 * `make install` to install the software locally, or
-* `make release` to compile a statically-linked executable into `target/release/ggtune`
+* `make release` to compile a statically-linked executable into `target/release/hbetune`

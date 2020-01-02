@@ -116,7 +116,7 @@ impl Space {
     ///
     /// ```
     /// #[macro_use] extern crate ndarray;
-    /// # use ggtune::Space;
+    /// # use hbetune::Space;
     /// # fn main() {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
@@ -164,7 +164,7 @@ impl Space {
     ///
     /// ```
     /// #[macro_use] extern crate ndarray;
-    /// # use ggtune::{Space, ParameterValue};
+    /// # use hbetune::{Space, ParameterValue};
     /// # fn main() {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
