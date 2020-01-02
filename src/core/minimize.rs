@@ -459,7 +459,7 @@ where
         output: &mut Output<A>,
     ) -> Result<Estimator::Model, Estimator::Error> {
         assert!(
-            individuals.len() > 0,
+            !individuals.is_empty(),
             "fit_next_model() requires at least one individual"
         );
         let timer = self.time_source.as_ref()();
@@ -616,10 +616,7 @@ where
         self.evaluate_all(validation_samples.as_mut_slice(), rng, output, gen);
 
         // combine new data with model, without refitting
-        let individuals = individuals
-            .into_iter()
-            .chain(&validation_samples)
-            .collect_vec();
+        let individuals = individuals.iter().chain(&validation_samples).collect_vec();
         let xs = self.space.project_into_features_array(
             individuals
                 .iter()

@@ -42,7 +42,7 @@ impl<K, A> FittedKernel<K, A> {
     {
         let LmlWithGradient {
             lml,
-            lml_gradient: _,
+            lml_gradient: _lml_gradient,
             alpha,
             factorization,
         } = match LmlWithGradient::of(

@@ -117,14 +117,12 @@ impl Space {
     /// ```
     /// #[macro_use] extern crate ndarray;
     /// # use hbetune::Space;
-    /// # fn main() {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
     /// let params = [(-1.0).into(), 7.0.into()];
     /// let features: Vec<f64> = space.project_into_features(params);
     /// assert_eq!(features, &[0.25, 0.7]);
-    /// # }
     /// ```
     pub fn project_into_features<A: Scalar>(&self, x: impl AsRef<[ParameterValue]>) -> Vec<A> {
         let x = x.as_ref();
@@ -165,7 +163,6 @@ impl Space {
     /// ```
     /// #[macro_use] extern crate ndarray;
     /// # use hbetune::{Space, ParameterValue};
-    /// # fn main() {
     /// let mut space = Space::new();
     /// space.add_real_parameter("a", -2.0, 2.0);
     /// space.add_real_parameter("b", 0.0, 10.0);
@@ -175,7 +172,6 @@ impl Space {
     ///     space.project_from_features(features).as_slice(),
     ///     params.as_ref(),
     /// );
-    /// # }
     /// ```
     pub fn project_from_features<A: Scalar>(&self, x: impl AsRef<[A]>) -> Vec<ParameterValue> {
         x.as_ref()

@@ -66,14 +66,12 @@ where
 /// ```
 /// # #[macro_use] extern crate approx;
 /// # use hbetune::benchfn::easom;
-/// # fn main() {
 /// const PI32: f32 = std::f32::consts::PI;
 /// const PI64: f64 = std::f64::consts::PI;
 /// assert_eq!(easom(PI32, PI32, 1.0), 0.0, "optimum with f32");
 /// assert_eq!(easom(PI64, PI64, 1.0), 0.0, "optimum with f64");
 /// assert!(abs_diff_eq!(easom(0.0, 0.0, 1.0), 1.0, epsilon = 1e-5), "center is one");
 /// assert!(abs_diff_eq!(easom(0.0, 0.0, 3.0), 3.0, epsilon = 1e-5), "can be scaled");
-/// # }
 /// ```
 ///
 /// Definition taken from:
@@ -93,15 +91,13 @@ where
 /// Bounds: -5 <= xi <= 5
 ///
 /// ```
-/// # use hbetune::benchfn::himmelblau;
 /// # #[macro_use] extern crate approx;
-/// # fn main() {
+/// # use hbetune::benchfn::himmelblau;
 /// assert!(abs_diff_eq!(himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "min 1");
 /// assert!(abs_diff_eq!(himmelblau(-2.805118, 3.131312), 0.0, epsilon = 1E-5), "min 2");
 /// assert!(abs_diff_eq!(himmelblau(-3.779310, -3.283186), 0.0, epsilon = 1E-5), "min 3");
 /// assert!(abs_diff_eq!(himmelblau(3.584428, -1.848126), 0.0, epsilon = 1E-5), "min 4");
 /// assert!(abs_diff_eq!(himmelblau(3.0, 2.0), 0.0, epsilon = 1E-5), "works with f32");
-/// # }
 /// ```
 pub fn himmelblau<A>(x1: A, x2: A) -> A
 where
@@ -121,12 +117,10 @@ where
 /// # #[macro_use] extern crate ndarray;
 /// # use ndarray::prelude::*;
 /// # use hbetune::benchfn::rastrigin;
-/// # fn main() {
 /// assert_eq!(rastrigin(array![0.0f32], 10.0), 0.0, "minimum in 1D as f32");
 /// assert_eq!(rastrigin(array![0.0f64], 10.0), 0.0, "minimum in 1D as f64");
 /// assert_eq!(rastrigin(array![0.0, 0.0], 10.0), 0.0, "minimum in 2D");
 /// assert_eq!(rastrigin(Array::from(vec![0.0; 10]), 10.0), 0.0, "minimum in 10D");
-/// # }
 /// ```
 ///
 /// At least one dimension is required:
@@ -134,9 +128,7 @@ where
 /// ``` should_panic
 /// # #[macro_use] extern crate ndarray;
 /// # use hbetune::benchfn::rastrigin;
-/// # fn main() {
 /// rastrigin(array![], 10.0);  // panics
-/// # }
 /// ```
 pub fn rastrigin<A, S>(xs: ArrayBase<S, Ix1>, amplitude: A) -> A
 where
@@ -163,10 +155,8 @@ where
 /// # #[macro_use] extern crate ndarray;
 /// # use ndarray::prelude::*;
 /// # use hbetune::benchfn::rosenbrock;
-/// # fn main() {
 /// assert_eq!(rosenbrock(array![1.0, 1.0]), 0.0);
 /// assert_eq!(rosenbrock(Array::from(vec![1.0; 6])), 0.0);
-/// # }
 /// ```
 ///
 /// At least two dimensions are required:
@@ -174,9 +164,7 @@ where
 /// ``` should_panic
 /// # #[macro_use] extern crate ndarray;
 /// # use hbetune::benchfn::rosenbrock;
-/// # fn main() {
 /// rosenbrock(array![0.0]);  // panics
-/// # }
 /// ```
 pub fn rosenbrock<A, S>(xs: ArrayBase<S, Ix1>) -> A
 where
