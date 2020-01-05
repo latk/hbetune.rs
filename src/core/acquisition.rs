@@ -62,7 +62,13 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
                     .max_by(|&a, &b| {
                         candidate_ei[a]
                             .partial_cmp(&candidate_ei[b])
-                            .expect("EI should be comparable")
+                            .ok_or_else(|| {
+                                format!(
+                                    "EI should be comparable: a={} b={}",
+                                    candidate_ei[a], candidate_ei[b]
+                                )
+                            })
+                            .unwrap()
                     })
                     .expect("there should be a candidate with maximal EI");
 
@@ -78,10 +84,35 @@ impl<A> AcquisitionStrategy<A> for MutationAcquisition {
 }
 
 pub fn expected_improvement(mean: f64, std: f64, fmin: f64) -> f64 {
+    assert!(mean.is_finite(), "mean must be finite: {}", mean);
+    assert!(std.is_finite(), "std must be finite: {}", std);
+    assert!(fmin.is_finite(), "fmin must be finite: {}", fmin);
+
+    // trivial case: if std is zero, the EI depends purely on the position of the mean.
+    // That way, we don't have to calculate z-scores which could become NaN.
+    if std <= 0.0 || ulps_eq!(std, 0.0) {
+        if mean < fmin {
+            // expected improvement by the difference is guaranteed
+            return -(mean - fmin);
+        } else {
+            // guaranteed that no improvement is possible
+            return 0.0;
+        }
+    }
+
+    // do the full calculations using z-scores
     use statrs::distribution::{Continuous, Univariate};
     let norm = statrs::distribution::Normal::new(0.0, 1.0).unwrap();
     let z = -(mean - fmin) / std;
-    -(mean - fmin) * norm.cdf(z) + std * norm.pdf(z)
+    let ei = -(mean - fmin) * norm.cdf(z) + std * norm.pdf(z);
+
+    assert!(ei.is_finite(), "EI must be finite: {}", ei);
+    assert!(
+        ei >= 0.0 || ulps_eq!(ei, 0.0),
+        "EI must be non-negative: {}",
+        ei
+    );
+    ei
 }
 
 fn take_vec_item<T>(mut xs: Vec<T>, i: usize) -> T {
