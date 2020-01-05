@@ -23,7 +23,9 @@ mod util;
 mod core;
 mod gpr;
 
-pub use crate::core::acquisition::{AcquisitionStrategy, MutationAcquisition};
+pub use crate::core::acquisition::{
+    AcquisitionStrategy, MutationAcquisition, SearchingAcquisition,
+};
 pub use crate::core::benchfn;
 pub use crate::core::gpr::{EstimatorGPR, SurrogateModelGPR};
 pub use crate::core::individual::Individual;

@@ -1,5 +1,5 @@
 use crate::core::surrogate_model::SummaryStatistics;
-use crate::{AcquisitionStrategy, MutationAcquisition};
+use crate::{AcquisitionStrategy, MutationAcquisition, SearchingAcquisition};
 use crate::{Estimator as ModelEstimator, SurrogateModel};
 use crate::{Individual, Output, OutputEventHandler as _, ParameterValue, Scalar, Space, RNG};
 
@@ -254,8 +254,11 @@ impl Minimizer {
             self.competition_rate,
         );
 
-        let acquisition_strategy =
-            acquisition_strategy.unwrap_or_else(|| Box::new(MutationAcquisition { breadth: 10 }));
+        let acquisition_strategy = acquisition_strategy.unwrap_or_else(|| {
+            Box::new(SearchingAcquisition {
+                base: MutationAcquisition { breadth: 10 },
+            })
+        });
 
         let time_source = time_source.unwrap_or_else(|| Box::new(Instant::now));
 
