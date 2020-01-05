@@ -92,6 +92,13 @@ Minimizer options:
   Towards zero, there is only offspring–parent competition.
   Towards one, all individuals compete against each other.
   (default 0.25).
+* **`--confidence-bound SIGMAS`**:
+  penalize uncertainty in the objective prediction when suggesting the best sample.
+  Only used during final suggestion phase, not during iterative optimization.
+  Specifies the "number of sigmas" of the upper confidence bound,
+  e.g. `1` is the 1-sigma confidence bound on the objective.
+  Setting to zero corresponds to optimizing the *median* predicted objective.
+  (default: 1.0).
 
 Parameters:
 

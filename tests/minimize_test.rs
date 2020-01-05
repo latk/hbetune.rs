@@ -292,6 +292,7 @@ fn rosenbrock_d2_integration() {
             .arg("--max-nevals=90")
             .arg("--initial=50")
             .arg("--popsize=5")
+            .arg("--confidence-bound=0")
             .arg("--param=x1 real -2.5 2.5")
             .arg("--param=x2 real -2.5 2.5")
             .args(&["function", "rosenbrock"]);

@@ -146,6 +146,14 @@ pub struct Minimizer {
     /// Towards one, all individuals compete against each other.
     #[structopt(long, default_value = "0.25")]
     pub competition_rate: f64,
+
+    /// Penalize uncertainty in the objective prediction when suggesting the best sample.
+    /// Only used during final suggestion phase, not during iterative optimization.
+    /// Specifies the "number of sigmas" of the upper confidence bound,
+    /// e.g. `1` is the 1-sigma confidence bound on the objective.
+    /// Setting to zero corresponds to optimizing the *median* predicted objective.
+    #[structopt(long, default_value = "1.0")]
+    pub confidence_bound: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -180,6 +188,7 @@ impl Default for Minimizer {
             select_via: FitnessVia::Observation,
             fmin_via: FitnessVia::Prediction,
             competition_rate: 0.25,
+            confidence_bound: 1.0,
         }
     }
 }
@@ -574,8 +583,14 @@ where
         output: &mut Output<A>,
         gen: u16,
     ) -> (Vec<ParameterValue>, SummaryStatistics<A>) {
-        let (suggestion, suggestion_y) =
-            find_best_individual_by_prediction(individuals, model, &self.space);
+        let confidence_bound = A::from_f(self.config.confidence_bound);
+
+        let (suggestion, suggestion_y) = find_best_individual_by_confidence_bound(
+            individuals,
+            model,
+            &self.space,
+            confidence_bound,
+        );
 
         // We now have the minimum evaluated point.
         // Use that as a starting point for minimization of the response surface.
@@ -585,7 +600,9 @@ where
                 assert!(maybe_grad.is_none(), "cannot provide gradients");
                 let x_design = self.space.project_from_features(x);
                 let x_normalized = self.space.project_into_features(x_design.as_slice());
-                model.predict_mean(x_normalized.into()).into()
+                model
+                    .predict_confidence_bound(x_normalized.into(), confidence_bound)
+                    .into()
             },
             suggestion_features.as_mut_slice(),
             vec![(0.0, 1.0); self.space.len()].as_slice(),
@@ -660,10 +677,11 @@ impl<'life, A> FitnessOperator<'life, A> {
     }
 }
 
-fn find_best_individual_by_prediction<'a, A, Model>(
+fn find_best_individual_by_confidence_bound<'a, A, Model>(
     individuals: &'a [Individual<A>],
     model: &Model,
     space: &Space,
+    confidence_bound: A,
 ) -> (&'a [ParameterValue], A)
 where
     A: Scalar,
@@ -675,16 +693,23 @@ where
         .next()
         .expect("should have at least one individual")
         .sample();
-    let mut suggestion_y = model.predict_mean(space.project_into_features(suggestion).into());
+    let mut suggestion_ucb = model.predict_confidence_bound(
+        space.project_into_features(suggestion).into(),
+        confidence_bound,
+    );
 
     for ind in individuals_iter {
-        let candidate_y = model.predict_mean(space.project_into_features(ind.sample()).into());
-        if candidate_y < suggestion_y {
+        let candidate_ucb = model.predict_confidence_bound(
+            space.project_into_features(ind.sample()).into(),
+            confidence_bound,
+        );
+        if candidate_ucb < suggestion_ucb {
             suggestion = ind.sample();
-            suggestion_y = candidate_y;
+            suggestion_ucb = candidate_ucb;
         }
     }
 
+    let suggestion_y = model.predict_mean(space.project_into_features(suggestion).into());
     (suggestion, suggestion_y)
 }
 

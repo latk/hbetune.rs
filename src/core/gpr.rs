@@ -91,6 +91,26 @@ impl<A: Scalar> SurrogateModel<A> for SurrogateModelGPR<A> {
         self.y_norm.project_location_from_normalized(y)
     }
 
+    fn predict_confidence_bound(&self, x: Array1<A>, cb: A) -> A {
+        let mut vnorm = Array1::zeros(1);
+        let mnorm = predict(
+            &self.kernel,
+            self.alpha.view(),
+            x.view().insert_axis(Axis(0)),
+            self.x_train.view(),
+            self.k_inv.view(),
+            Some(vnorm.view_mut()),
+        );
+        let stdnorm = vnorm.mapv(|x| x.sqrt());
+
+        // Confidence bounds are quantiles of the distribution,
+        // thus treating them as fixed locations is correct.
+        let ys = self
+            .y_norm
+            .project_location_from_normalized(mnorm + stdnorm * cb);
+        *ys.first().unwrap()
+    }
+
     fn predict_statistics(
         &self,
         x: Array1<A>,

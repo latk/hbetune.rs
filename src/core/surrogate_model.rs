@@ -51,6 +51,8 @@ pub trait SurrogateModel<A: Scalar> {
         (*mean.first().unwrap(), *ei.first().unwrap())
     }
 
+    fn predict_confidence_bound(&self, x: Array1<A>, cb: A) -> A;
+
     /// Predict the mean value of the surrogate model.
     fn predict_mean_a(&self, x: Array2<A>) -> Array1<A>;
 
