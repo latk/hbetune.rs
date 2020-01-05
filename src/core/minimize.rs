@@ -571,22 +571,8 @@ where
         output: &mut Output<A>,
         gen: u16,
     ) -> (Vec<ParameterValue>, SummaryStatistics<A>) {
-        let mut individuals_iter = individuals.iter();
-        let mut suggestion = individuals_iter
-            .next()
-            .expect("should have at least one individual")
-            .sample();
-        let mut suggestion_y =
-            model.predict_mean(self.space.project_into_features(suggestion).into());
-
-        for ind in individuals_iter {
-            let candidate_y =
-                model.predict_mean(self.space.project_into_features(ind.sample()).into());
-            if candidate_y < suggestion_y {
-                suggestion = ind.sample();
-                suggestion_y = candidate_y;
-            }
-        }
+        let (suggestion, suggestion_y) =
+            find_best_individual_by_prediction(individuals, model, &self.space);
 
         // We now have the minimum evaluated point.
         // Use that as a starting point for minimization of the response surface.
@@ -607,9 +593,16 @@ where
             .space
             .project_from_features(suggestion_features.clone());
 
+        let (suggestion_prediction, suggestion_ei) = model.predict_mean_ei(
+            self.space
+                .project_into_features(suggestion.as_slice())
+                .into(),
+            suggestion_y,
+        );
+
         let mut validation_sample = Individual::new(suggestion.clone());
         validation_sample
-            .set_prediction_and_ei(A::from_f(0.), A::from_f(0.))
+            .set_prediction_and_ei(suggestion_prediction, suggestion_ei)
             .expect("individual cannot have previous prediction");
         let mut validation_samples = vec![validation_sample; self.config.validation];
 
@@ -662,6 +655,34 @@ impl<'life, A> FitnessOperator<'life, A> {
         let b = self.get_fitness(b);
         a.partial_cmp(&b)
     }
+}
+
+fn find_best_individual_by_prediction<'a, A, Model>(
+    individuals: &'a [Individual<A>],
+    model: &Model,
+    space: &Space,
+) -> (&'a [ParameterValue], A)
+where
+    A: Scalar,
+    Model: SurrogateModel<A>,
+{
+    let mut individuals_iter = individuals.iter();
+
+    let mut suggestion = individuals_iter
+        .next()
+        .expect("should have at least one individual")
+        .sample();
+    let mut suggestion_y = model.predict_mean(space.project_into_features(suggestion).into());
+
+    for ind in individuals_iter {
+        let candidate_y = model.predict_mean(space.project_into_features(ind.sample()).into());
+        if candidate_y < suggestion_y {
+            suggestion = ind.sample();
+            suggestion_y = candidate_y;
+        }
+    }
+
+    (suggestion, suggestion_y)
 }
 
 /// Select the offspring, unless the parent was better.
