@@ -1,0 +1,65 @@
+#!/bin/bash
+
+source experiment-base
+set -euo pipefail
+
+OPT_NEVALS="${NEVALS:-100}"
+NOISE="${NOISE:-0}"
+VALIDATE_NEVALS=1  # because true function is known
+
+command-hbetune() {
+    [[ ! -z "$NOISE" ]] || error "variable NOISE required"
+
+    command-hbetune-base \
+        "$OPT_NEVALS" \
+        --initial 50 --popsize 5 --confidence-bound 0 \
+        --param 'x1 real -2 2' \
+        --param 'x2 real -2 2' \
+        command -- $HBETUNE function --seed={SEED} --noise="$NOISE" \
+        goldstein-price -- {x1} {x2}
+}
+
+command-irace() {
+    [[ ! -z "$NOISE" ]] || error "variable NOISE required"
+
+    command-irace-base \
+        --nevals="$OPT_NEVALS" \
+        --instance="gp $HBETUNE function --seed=%SEED% --noise=$NOISE goldstein-price --" \
+        --parallel="$(nproc)" \
+        --allow-deterministic \
+        -- \
+        'x1 "" r (-2, 2)' \
+        'x2 "" r (-2, 2)'
+}
+
+command-validation() {
+    [[ ! -z "$SEED" ]] || error "variable SEED required"
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+    [[ ! -z "$HBETUNE" ]] || error "variable HBETUNE required"
+    [[ -f "$PREFIX.json" ]] || error "file $PREFIX.json required"
+
+    eval "local x1 x2; $(extract-parameters-from-json <"$PREFIX.json")"
+
+    # not necessary to sample multiple values,
+    # since the true function is known
+    run-verbosely $HBETUNE function goldstein-price -- "$x1" "$x2" \
+                  >"$PREFIX.validation"
+}
+
+case "$1" in
+    hbetune)
+        command-hbetune
+        ;;
+    hbetunelog)
+        TRANSFORM_OBJECTIVE=log command-hbetune
+        ;;
+    irace)
+        command-irace
+        ;;
+    validation)
+        command-validation
+        ;;
+    *)
+        error "unknown command $1"
+        ;;
+esac

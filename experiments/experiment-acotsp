@@ -1,0 +1,109 @@
+#!/bin/bash
+
+source experiment-base
+set -euo pipefail
+
+META_NEVALS=${NEVALS:-150}
+OPT_NEVALS=100
+VALIDATE_NEVALS=40
+
+ACOTSP=ACOTSP-1.03/acotsp
+INSTANCE=ACOTSP-1.03/pcb1173.tsp
+
+write-inner-command() {
+    local filename="$1"
+    cat >"$filename" <<EOF
+#!/bin/bash
+set -euo pipefail
+
+test -x $ACOTSP || {
+    echo "error: executable not found: $ACOTSP" >&2
+    exit 1
+}
+
+$ACOTSP --quiet --tries 1 --time 2 --acs --localsearch 3 --dlb 1 -i $INSTANCE \$@ \
+    | grep -oE 'Best [-+0-9.e]+' | cut -d' ' -f2
+EOF
+    chmod +x "$filename"
+}
+
+command-hbetune() {
+    [[ ! -z "$SEED" ]] || error "variable SEED required"
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+    [[ ! -z "$HBETUNE" ]] || error "variable HBETUNE required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    command-hbetune-base \
+        "$META_NEVALS" \
+        --initial 88 --popsize 4 --validation 2 --relscale-attenuation=0.99 \
+        --param 'alpha real 1e-6 5' \
+        --param 'beta real 1e-6 10' \
+        --param 'rho real 1e-6 1' \
+        --param 'ants logint 5 100' \
+        --param 'q0 real 0 1' \
+        --param 'nnls logint 5 50' \
+        command -- "$PREFIX.target" \
+        --seed {SEED} \
+        --alpha {alpha} --beta {beta} --rho {rho} \
+        --ants {ants} --q0 {q0} --nnls {nnls} \
+}
+
+command-irace() {
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    command-irace-base \
+        --nevals="$META_NEVALS" \
+        --instance="instance $PREFIX.target -seed %SEED%" \
+        --parallel=4 \
+        --first-test=2 \
+        -- \
+        'alpha "--alpha " r (1e-6, 5)' \
+        'beta  "--beta "  r (1e-6, 10)' \
+        'rho   "--rho "   r (1e-6, 1)' \
+        'ants  "--ants "  i,log (5, 100)' \
+        'q0    "--q0 "    r (0, 1)' \
+        'nnls  "--nnls "  i,log (5, 50)'
+}
+
+command-validation() {
+    [[ ! -z "$SEED" ]] || error "variable SEED required"
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+    [[ ! -z "$HBETUNE" ]] || error "variable HBETUNE required"
+    [[ -f "$PREFIX.json" ]] || error "file $PREFIX.json required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    local alpha beta rho ants q0 nnls
+    eval "$(extract-parameters-from-json <"$PREFIX.json")"
+
+    parallel --verbose --load=100% --jobs=100% --header : \
+             "$PREFIX.target" \
+             --seed {seed} \
+             --alpha $alpha --beta $beta --rho $rho \
+             --ants $ants --q0 $q0 --nnls $nnls \
+             ::: seed $(make-random-numbers "$SEED" "$VALIDATE_NEVALS") \
+             >"$PREFIX.validation"
+}
+
+case "$1" in
+    hbetune)
+        command-hbetune
+        ;;
+    irace)
+        command-irace
+        ;;
+    validation)
+        command-validation
+        ;;
+    debug)
+        ;;
+    *)
+        error "unknown command $1"
+        ;;
+esac

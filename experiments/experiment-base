@@ -1,0 +1,136 @@
+#!/bin/bash
+
+
+run-verbosely() {
+    set -euo pipefail
+    echo "running: $*" >&2
+    exec -- "$@"
+}
+
+error() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+# make-random-numbers SEED N
+make-random-numbers() {
+    local seed="$1" n="$2"
+    python3 -c "from random import seed, randint;\
+seed($seed, version=2);\
+[print(randint(1, 1<<31)) for _ in range($n)]"
+}
+
+extract-parameters-from-json() {
+    jq -r '.location[] | "\(.name)=\(.value | @sh)"' "$@"
+}
+
+# command-hbetune-base NEVALS HBETUNE_ARGS...
+command-hbetune-base() {
+    local nevals="$1"
+    shift
+
+    test ! -z "$SEED" || error "variable SEED required"
+    test ! -z "$PREFIX" || error "variable PREFIX required"
+    test ! -z "$HBETUNE" || error "variable HBETUNE required"
+
+    run-verbosely $HBETUNE --quiet run --write-csv="$PREFIX.csv" \
+                  --seed="$SEED" --max-nevals="$nevals" \
+                  --transform-objective="${TRANSFORM_OBJECTIVE:-linear}" \
+                  "$@" \
+                  > "$PREFIX.json"
+}
+
+# command-irace-base OPTIONS... -- PARAMETERS...
+#
+# Required options:
+#   --nevals=NEVALS
+#   --instance=INSTANCE
+#   --parallel=PARALLEL
+# Optional options:
+#   --allow-deterministic
+#   --first-test=N
+command-irace-base() {
+    local nevals instance allow_deterministic="no" parallel first_test
+
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            --nevals=*)
+                nevals="${1#*=}"
+                shift
+                ;;
+            --instance=*)
+                instance="${1#*=}"
+                shift
+                ;;
+            --parallel=*)
+                parallel="${1#*=}"
+                shift
+                ;;
+            --allow-deterministic)
+                allow_deterministic=yes
+                shift
+                ;;
+            --first-test=*)
+                first_test="$1"
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                error "command-irace-base: unknown option $1"
+                ;;
+        esac
+    done
+
+    test ! -z "$nevals" || error "argument --nevals=NEVALS required"
+    test ! -z "$instance" || error "argument --instance=INSTANCE" required
+    test ! -z "$parallel" || error "argument --parallel=PARALLEL" required
+
+    test ! -z "$SEED" || error "variable SEED required"
+    test ! -z "$PREFIX" || error "variable PREFIX required"
+    test ! -z "$IRACE" || error "variable IRACE required"
+    test ! -z "$HBETUNE" || error "variable HBETUNE required"
+
+    test "$#" -gt 0 || error "command-irace-base: at least one parameter required"
+
+    trap 'rm -f "$PREFIX.parameters" "$PREFIX.instances"' ERR EXIT
+
+    local param
+    for param in "$@"; do
+        echo "$param"
+    done > "$PREFIX.parameters"
+
+    local -a extra_args=()
+
+    # Due to some irace limitation,
+    # the number of instances needs to be at least "firstTest" in deterministic mode.
+    # Since this limitation isn't inherent to the algorithm,
+    # the available experiments have also been doubled.
+    if [[ "$allow_deterministic" = yes && "$NOISE" = 0 ]]; then
+        (echo "$instance"; echo "$instance") > "$PREFIX.instances"
+        extra_args+=(
+            --max-experiments=$((2 * "$nevals"))
+            --deterministic=1
+            --first-test=2
+        )
+    else
+        echo "$instance" > "$PREFIX.instances"
+        extra_args+=(
+            --max-experiments="$nevals"
+        )
+    fi
+
+    if [[ ! -z "$first_test" ]]; then
+        extra_args+=("$first_test")
+    fi
+
+    run-verbosely $IRACE --scenario=/dev/null \
+                  --seed="$SEED" "${extra_args[@]}" --parallel="$parallel" \
+                  --parameter-file="$PREFIX.parameters" \
+                  --train-instances-file="$PREFIX.instances" \
+                  --train-instances-dir="." \
+                  --target-runner=./irace-target-runner \
+                  --log-file="$PREFIX.rdata"
+}

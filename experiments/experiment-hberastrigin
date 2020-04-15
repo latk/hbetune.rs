@@ -1,0 +1,108 @@
+#!/bin/bash
+
+source experiment-base
+set -euo pipefail
+
+META_NEVALS=${NEVALS:-150}
+OPT_NEVALS=100
+VALIDATE_NEVALS=40
+
+write-inner-command() {
+    local filename="$1"
+    cat >"$filename" <<EOF
+#!/bin/bash
+set -euo pipefail
+result="\$($HBETUNE --quiet run \
+         --max-nevals="$OPT_NEVALS" \
+         \$@ \
+         --param 'x1 real -5.12 5.12' \
+         --param 'x2 real -5.12 5.12' \
+         function rastrigin \
+    | sed 's/^optimization result: //')"
+
+# create x1, x2
+eval "\$(echo "\$result" | jq -r '.location[] | "\(.name)=\(.value | @sh)"')"
+
+$HBETUNE function rastrigin -- "\$x1" "\$x2"
+EOF
+    chmod +x "$filename"
+}
+
+command-hbetune() {
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    command-hbetune-base \
+        "$META_NEVALS" \
+        --initial 88 --popsize 4 --validation 2 --relscale-attenuation=0.99 \
+        --param 'initial logint 1 85 1' \
+        --param 'popsize logint 1 10' \
+        --param 'attenuation real 0.5 1' \
+        --param 'competition real 0 1' \
+        --param 'confidencebound logreal 0 3 0.1' \
+        command -- "$PREFIX.target" \
+        --seed={SEED} \
+        --relscale-attenuation={attenuation} \
+        --competition-rate={competition} \
+        --confidence-bound={confidencebound}
+}
+
+command-irace() {
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    command-irace-base \
+        --nevals="$META_NEVALS" \
+        --instance="instance $PREFIX.target --seed=%SEED%" \
+        --parallel=4 \
+        --first-test=2 \
+        -- \
+        'initial "--initial=" i,log (1, 85)' \
+        'popsize "--popsize=" i,log (1, 10)' \
+        'attenuation "--relscale-attenuation=" r (0.5, 1)' \
+        'competition "--competition-rate=" r (0, 1)' \
+        'confidencebound "--confidence-bound=" r,log (0.01, 3)'
+}
+
+command-validation() {
+    [[ ! -z "$SEED" ]] || error "variable SEED required"
+    [[ ! -z "$PREFIX" ]] || error "variable PREFIX required"
+    [[ ! -z "$HBETUNE" ]] || error "variable HBETUNE required"
+    [[ -f "$PREFIX.json" ]] || error "file $PREFIX.json required"
+
+    trap 'rm -f "$PREFIX.target"' ERR EXIT
+    write-inner-command "$PREFIX.target"
+
+    local initial popsize attenuation competition confidencebound
+    eval "$(extract-parameters-from-json <"$PREFIX.json")"
+
+    parallel --verbose --load=100% --jobs=100% --header : \
+             "$PREFIX.target" \
+             --seed={seed} \
+             --initial=$initial \
+             --popsize=$popsize \
+             --relscale-attenuation=$attenuation \
+             --competition-rate=$competition \
+             --confidence-bound=$confidencebound \
+             ::: seed $(make-random-numbers "$SEED" "$VALIDATE_NEVALS") \
+             >"$PREFIX.validation"
+}
+
+case "$1" in
+    hbetune)
+        command-hbetune
+        ;;
+    irace)
+        command-irace
+        ;;
+    validation)
+        command-validation
+        ;;
+    *)
+        error "unknown command $1"
+        ;;
+esac

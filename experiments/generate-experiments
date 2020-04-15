@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# usage: ./generate-experiments RESULTS NAME RUNS EXTRA_ALGOS
+
+# make-seeds N METASEED
+make-seeds() {
+    python3 -c 'import sys, random as R; R.seed(sys.argv[2], version=2); [print(R.randint(1, 1<<31)) for _ in range(int(sys.argv[1]))]' "$@"
+}
+
+RESULTS="$1"
+NAME="$2"
+RUNS="$3"
+shift 3
+
+for seed in $(make-seeds $RUNS $NAME); do
+    for hbealgo in hbetune "$@"; do
+        for suffix in json csv validation; do
+            echo $RESULTS/$NAME-seed$seed-$hbealgo.$suffix
+        done
+    done
+    for suffix in rdata json validation; do
+        echo $RESULTS/$NAME-seed$seed-irace.$suffix
+    done
+done

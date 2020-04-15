@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+
+from scipy.stats import mannwhitneyu
+import click
+import glob
+import json
+import math
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import re
+
+TUNERS = ['irace', 'hbetune', 'hbetunelog']
+
+# default is 0.0
+TRUE_OPTIMUM = {
+    'goldsteinprice': 3.0,
+    'acotsp': 56892,  # for pcb1173 instance
+}
+
+# plot configuration
+# use TrueType fonts (required by ACM)
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+# use a sensible font
+matplotlib.rcParams['font.family'] = 'sans-serif'
+matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False
+
+
+def load_all_files(pattern):
+    for f in glob.glob(pattern):
+        for x in open(f):
+            yield float(x)
+
+
+def load_all_data(experiment, tuners):
+    name = experiment.split('/')[-1].split('+')[0]
+    true_optimum = TRUE_OPTIMUM.get(name, 0.0)
+    data = {}
+    for tuner in tuners:
+        col = list(load_all_files(f'{experiment}-*-{tuner}.validation'))
+        if not len(col):
+            continue
+        col = np.array(col)
+        col -= true_optimum
+        data[tuner] = col
+    return data
+
+
+def format_logtick(x, pos):
+    if x == 1:
+        return str(x)
+    exponent = int(math.log(x))
+    return f"1E{exponent}"
+
+
+def make_boxplot(experiment, data, *, fig, ax):
+    ax.boxplot(
+        [data[colname].values for colname in data.columns],
+        labels=data.columns,
+        widths=0.7,
+        medianprops=dict(
+            color='k',
+        ),
+    )
+
+
+def save_boxplot(experiment, fig, ax):
+    axes = [ax] if ax is not None else fig.axes
+    for ax in axes:
+        if experiment.split('/')[-1].split('+')[0] != 'acotsp':
+            ax.set_yscale('log')
+        ax.minorticks_off()
+    fig.savefig(f'{experiment}.pdf', bbox_inches='tight')
+
+
+def insert_table(table: list, columns: list, data: dict):
+    assert set(columns) == set(data.keys()), \
+        f'column mismatch:\nexpected:{columns}\ngot:{list(data.keys())}'
+    table.append([data[col] for col in columns])
+
+
+def parse_experiment_name(rawname: str):
+    name, *extra = rawname.split('/')[-1].split('+')
+    extra = dict(re.match(r'^([a-z]+)([0-9]+)$', s).group(1, 2) for s in extra)
+    return name, extra
+
+
+def format_cell(experiment, colname, value):
+    basename = experiment.split('/')[-1].split('+')[0]
+
+    if colname == 'experiment':
+        return (value
+                .replace('_', ' ')
+                .replace('goldsteinprice', 'Goldstein-Price')
+                .replace('rosenbrock', 'Rosenbrock')
+                .replace('himmelblau', 'Himmelblau')
+                .replace('rastrigin', 'Rastrigin')
+                .replace('hbe', 'HBE/'))
+
+    if colname in ('noise', 'budget'):
+        return str(value)
+
+    if colname == 'tuner':
+        return value.replace('hbetune', 'HBE').replace('log', ' (log)')
+
+    if colname == 'count':
+        return str(int(value))
+
+    if colname == 'r':
+        return f'${value:.2f}$'.replace('0.', '.')
+
+    if colname == 'p':
+        if value < 0.001:
+            return '$< .001$'
+        return f'${value:.3f}$'.replace('0.', '.')
+
+    if colname in ('mean', 'std', 'min', '25%', '50%', '75%', 'max'):
+        if basename == 'acotsp':
+            return fr'${value:.0f}$'
+        frac, exp = f'{value:1.2e}'.split('e')
+        exp = int(exp)
+        sign = '+' if exp >= 0 else '-'
+        return fr'${frac} \, \mathrm{{E{sign}}}{abs(exp)}$'
+
+    raise ValueError(f'no way to format experiment={experiment} col={colname} value={value}')
+
+
+def create_parameter_summary(experiment, space):
+
+    def load_records(experiment, tuner):
+        for filename in glob.glob(f'{experiment}-*-{tuner}.json'):
+            with open(filename) as fh:
+                data = json.load(fh)["location"]
+                yield {param['name']: param['value'] for param in data}
+
+    irace = pd.DataFrame.from_records(list(load_records(experiment, 'irace'))).describe()
+    hbetune = pd.DataFrame.from_records(list(load_records(experiment, 'hbetune'))).describe()
+
+    with open(f'{experiment}.parameters.tex', 'w') as f:
+        def write(*args, **kwargs):
+            return print(*args, file=f, **kwargs)
+
+        def writerow(*args, **kwargs):
+            return write(*args, sep=' & ', end='\\\\\n', **kwargs)
+
+        def lotohi(data, name, paramtype):
+            lo = data.loc["25%", name]
+            hi = data.loc["75%", name]
+            if paramtype in ('int', 'logint'):
+                return f'${lo:.0f}$', f'${hi:.0f}$'
+            if paramtype in ('real', 'logreal'):
+                return f'${lo:.2f}$', f'${hi:.2f}$'
+            raise ValueError(f"unknown paramtype: {paramtype}")
+
+        write(r'\begin{tabular}{llccr@{ -- }lr@{ -- }l}')
+        write(r'\toprule')
+        writerow(
+            'parameter', 'type', 'lo', 'hi',
+            r'\multicolumn{2}{c}{irace}',
+            r'\multicolumn{2}{c}{HBE}',
+        )
+        write(r'\midrule')
+        for (name, paramtype, lo, hi) in space:
+            writerow(
+                name, paramtype, lo, hi,
+                *lotohi(irace, name, paramtype),
+                *lotohi(hbetune, name, paramtype),
+            )
+        write(r'\bottomrule')
+        write(r'\end{tabular}')
+
+
+@click.command()
+@click.argument('experiments', nargs=-1, required=True)
+def main(experiments):
+
+    global_summary = []
+    global_summary_columns = list(
+        'experiment noise budget tuner '
+        'mean std 25% 50% 75% '
+        'p r'.split())
+
+    DEFAULT_NEVALS = {
+        'hberosenbrock': 150,
+        'hberastrigin': 150,
+        'acotsp': 150,
+    }
+
+    figs = []
+    axes = {}
+    combinedfigs = {}
+
+    for experiment in experiments:
+        basename = experiment.split('/')[-1].split('+')[0]
+        data = pd.DataFrame(load_all_data(experiment, TUNERS))
+        summary = data.describe()
+
+        print(experiment)
+        print(summary)
+        print()
+
+        fig, ax = plt.subplots(figsize=(5, 3))
+        if basename in axes:
+            ax.get_shared_y_axes().join(ax, axes[basename])
+        axes[basename] = ax
+        make_boxplot(experiment, data, fig=fig, ax=ax)
+        ax.set_ylabel('objective')
+        figs.append((experiment, fig, ax))
+
+        if basename in ('rosenbrock', 'goldsteinprice', 'himmelblau', 'rastrigin'):
+
+            combinedfigname = '/'.join([*experiment.split('/')[:-1], basename])
+            try:
+                fig, figaxes = combinedfigs[combinedfigname]
+            except KeyError:
+                fig, figaxes = combinedfigs[combinedfigname] = plt.subplots(1, 3, figsize=(5*3, 3), sharey=True)
+
+            ax = None
+            axtitle = None
+            ylabel = None
+            if experiment.endswith('+noise10+nevals200'):
+                ax = figaxes[2]
+                axtitle = '(c) noise +10, 200 evals'
+            elif experiment.endswith('+noise10'):
+                ax = figaxes[1]
+                axtitle = '(b) noise +10, 100 evals'
+            elif experiment.endswith(basename):
+                ax = figaxes[0]
+                axtitle = '(a) no noise, 100 evals'
+                ylabel = 'objective'
+            elif experiment.endswith('+noise1'):
+                pass
+            else:
+                assert False, "unknown experiment configuration"
+
+            if ax is not None:
+                make_boxplot(experiment, data, fig=fig, ax=ax)
+                ax.set_xlabel(axtitle)
+                if ylabel is not None:
+                    ax.set_ylabel(ylabel)
+
+        # exclude low-noise experiments from table
+        if experiment.endswith('+noise1'):
+            continue
+
+        for col in summary:
+            name, extra = parse_experiment_name(experiment)
+
+            if col == 'irace':
+                otherdata = np.concatenate([
+                    data[othertuner]
+                    for othertuner in ('hbetune', 'hbetunelog')
+                    if othertuner in data])
+            else:
+                otherdata = data['irace']
+
+            result = mannwhitneyu(data[col], otherdata, alternative='less')
+            pvalue = result.pvalue
+            rank_biserial_r = 1 - (2 * result.statistic) / (len(data[col]) * len(otherdata))
+
+            insert_table(global_summary, global_summary_columns, {
+                'experiment': name,
+                'noise': int(extra.get('noise', 0)),
+                'budget': int(extra.get('nevals', DEFAULT_NEVALS.get(name, 100))),
+                'tuner': col,
+                'p': pvalue,
+                'r': rank_biserial_r,
+                **{key: value
+                   for key, value in summary[col].to_dict().items()
+                   if key not in ('count', 'min', 'max')},
+            })
+
+    print("... writing individual figures")
+    for (experiment, fig, ax) in figs:
+        save_boxplot(experiment, fig, ax)
+
+    print("... writing combined figures")
+    for (experiment, (fig, _)) in combinedfigs.items():
+        save_boxplot(f'{experiment}+combined', fig, None)
+
+    with open('results/summary.tex', 'w') as f:
+
+        global_summary_alignments = {
+            'experiment': 'l',
+            'tuner': 'l',
+            **{col: 'r'
+               for col in 'mean std min 25% 50% 75% max p r'.split()},
+        }
+
+        def write(*args, **kwargs):
+            return print(*args, file=f, **kwargs)
+
+        def writerow(*args, **kwargs):
+            return write(*args, sep=r' & ', end=' \\\\\n', **kwargs)
+
+        alignments = ''.join(
+            global_summary_alignments.get(col, 'r') for col in global_summary_columns
+        )
+        write(r'\begin{tabular}{%s}' % alignments)
+        write(r'\toprule')
+        writerow(*(fr'\multicolumn{{1}}{{c}}{{{name}}}'
+                   for name in (name.replace('%', r'\%')
+                                for name in global_summary_columns)))
+        write(r'\midrule')
+
+        # print each column, but possibly elide duplicative values
+        # and add separator lines
+        prevrow = None
+        for row in global_summary:
+            printrow = list(row)  # make a copy
+            if prevrow is not None:
+                for i, colname in enumerate(global_summary_columns):
+                    if colname not in ('experiment', 'noise', 'budget'):
+                        break
+                    if row[i] == prevrow[i]:
+                        printrow[i] = ''
+                    else:
+                        write(r'\cline{%d-%d}' % (i + 1, len(row)))
+                        break
+            writerow(
+                *(format_cell(row[0], col, value)
+                  for col, value in zip(global_summary_columns, printrow)),
+            )
+            prevrow = row
+
+        write(r'\bottomrule')
+        write(r'\end{tabular}')
+
+    create_parameter_summary('results/hberosenbrock', [
+        ('initial', 'logint', 1, 81),
+        ('popsize', 'logint', 1, 10),
+        ('attenuation', 'real', .5, 1.),
+        ('competition', 'real', 0., 1.),
+        ('confidencebound', 'logreal', 0., 3.0),
+    ])
+
+    create_parameter_summary('results/hberastrigin', [
+        ('initial', 'logint', 1, '81'),
+        ('popsize', 'logint', '1', '10'),
+        ('attenuation', 'real', '0.5', '1'),
+        ('competition', 'real', '0', '1'),
+        ('confidencebound', 'logreal', '0', '3'),
+    ])
+
+    create_parameter_summary('results/acotsp', [
+        ('alpha', 'real', '1E-6', '5'),
+        ('beta', 'real', '1E-6', '10'),
+        ('rho', 'real', '1E-6', '1'),
+        ('ants', 'logint', '5', '100'),
+        ('q0', 'real', '0', '1'),
+        ('nnls', 'logint', '5', '50'),
+    ])
+
+
+if __name__ == '__main__':
+    main()

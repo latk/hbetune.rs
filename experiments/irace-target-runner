@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -euo pipefail
+
+configid="$1" instanceid="$2" seed="$3" instancename="$4"
+shift 4
+declare -a command=("$@")
+
+# replace "%SEED%" placeholder with value
+for i in "${!command[@]}"; do
+    command[i]="${command[i]/\%SEED\%/$seed}"
+done
+
+exec -- "${command[@]}" 2>&1
