@@ -183,3 +183,41 @@ Therefore:
 
 * `make install` to install the software locally, or
 * `make release` to compile a statically-linked executable into `target/release/hbetune`
+## License
+
+### hbetune
+
+Files: `*`
+
+Copyright 2020 Lukas Atkinson
+
+License: AGPLv3+
+
+> This program is free software: you can redistribute it and/or modify
+> it under the terms of the GNU Affero General Public License as
+> published by the Free Software Foundation, either version 3 of the
+> License, or (at your option) any later version.
+>
+> This program is distributed in the hope that it will be useful,
+> but WITHOUT ANY WARRANTY; without even the implied warranty of
+> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+> GNU Affero General Public License for more details.
+>
+> You should have received a copy of the GNU Affero General Public License
+> along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+See: `LICENSE.AGPLv3.txt`
+
+### ACOTSP
+
+Files: `experiments/ACOTSP-1.03/*`
+
+Website: http://www.aco-metaheuristic.org/aco-code/
+
+Website: http://iridia.ulb.ac.be/~mdorigo/ACO/aco-code/public-software.html
+
+Copyright 2002 Thomas Stuetzle
+
+License: GPLv2+
+
+See: `experiments/ACOTSP-1.03/gpl.txt`

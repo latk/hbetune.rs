@@ -15,6 +15,12 @@ use structopt::StructOpt as _;
 mod objective_shell;
 
 #[derive(Debug, StructOpt)]
+#[structopt(about = concat!(
+    env!("CARGO_PKG_DESCRIPTION"), ".\n",
+    "Copyright 2020 ", env!("CARGO_PKG_AUTHORS"), "\n",
+    "License: AGPLv3+\n",
+    "Website: ", env!("CARGO_PKG_REPOSITORY")
+))]
 struct CliApp {
     /// enable verbose output
     #[structopt(long)]
