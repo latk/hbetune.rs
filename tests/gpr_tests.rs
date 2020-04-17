@@ -6,7 +6,6 @@ extern crate itertools;
 extern crate approx;
 
 use hbetune::{Estimator as _, EstimatorGPR, Space, SurrogateModel as _, SurrogateModelGPR, RNG};
-use itertools::Itertools as _;
 use ndarray::prelude::*;
 
 struct SimpleModel {
@@ -291,30 +290,157 @@ macro_rules! parametrize {
     );
 }
 
-parametrize!(it_works_in_2d(
-    { rng123: 123, rng171718: 171_718, rng6657: 6657 },
-    { gridtraining: "gridTraining", randomtraining: "randomTraining" },
-    { nonoise: 0.0, lownoise: 0.1, mediumnoise: 1.0, highnoise: 4.0 },
-    { selftest: "selftest", newsample: "newsample" },
-));
+mod describe_2d {
+    use super::*;
 
-fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmode: &str) {
-    use hbetune::benchfn::sphere;
+    parametrize!(it_works(
+        { gridtraining: TrainingSet::Grid, randomtraining: TrainingSet::Random },
+        { nonoise: 0.0, lownoise: 0.1, mediumnoise: 1.0, highnoise: 4.0 },
+        { selftest: TestMode::SelfTest, newsample: TestMode::NewSample },
+    ));
 
-    let mut rng = RNG::new_with_seed(rng_seed);
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    enum TestMode {
+        SelfTest,
+        NewSample,
+    }
 
-    let xs_features = generate_training_set(training_set, &mut rng);
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    enum TrainingSet {
+        Grid,
+        Random,
+    }
 
-    let ys = xs_features
-        .map_axis(Axis(1), sphere)
-        .mapv_into(|y| rng.normal(y, noise_level));
+    struct Configuration {
+        training: TrainingSet,
+        testing: TestMode,
+        noise_level: f64,
+        seed: usize,
+    }
 
-    let model = train_model(xs_features.clone(), ys, &mut rng);
+    struct Results {
+        test_x1: Vec<f64>,
+        test_x2: Vec<f64>,
+        expected_y: Vec<f64>,
+        actual_y: Vec<f64>,
+        actual_std: Vec<f64>,
+    }
 
-    fn generate_training_set(training_set: &str, rng: &mut RNG) -> Array2<f64> {
+    struct Record {
+        test_x1: f64,
+        test_x2: f64,
+        expected_y: f64,
+        actual_y: f64,
+        actual_std: f64,
+    }
+
+    fn it_works(training_set: TrainingSet, noise_level: f64, testmode: TestMode) {
+        let seeds = [1234, 171718, 6657, 8877, 4184, 8736, 2712, 12808];
+
+        let mut errors: Vec<_> = seeds
+            .iter()
+            .cloned()
+            .map(|seed| {
+                let conf = Configuration {
+                    training: training_set,
+                    testing: testmode,
+                    noise_level,
+                    seed,
+                };
+
+                let results = conf.run();
+                results.look_good(&conf).err()
+            })
+            .flatten()
+            .collect();
+
+        // skipping a bad seed is acceptable
+        if errors.len() > 1 {
+            panic!(errors.pop().unwrap()())
+        }
+    }
+
+    impl Configuration {
+        fn allowed_noise(&self) -> f64 {
+            let Configuration {
+                training,
+                testing,
+                noise_level,
+                seed: _seed,
+            } = *self;
+
+            let cond = |cond, value| if cond { Some(value) } else { None };
+
+            [
+                Some(noise_level),
+                Some(0.1),
+                cond(training == TrainingSet::Random, 0.1),
+                cond(testing == TestMode::NewSample, 0.1),
+                cond(testing == TestMode::SelfTest && noise_level == 0.0, 0.1),
+            ]
+            .iter()
+            .flatten()
+            .sum()
+        }
+
+        fn allowed_failures(&self) -> usize {
+            let Configuration {
+                training,
+                testing,
+                noise_level,
+                seed: _seed,
+            } = *self;
+
+            (noise_level > 1.0) as usize
+                + (testing == TestMode::NewSample) as usize
+                + ((training, testing) == (TrainingSet::Random, TestMode::NewSample)) as usize
+        }
+
+        fn run(&self) -> Results {
+            use hbetune::benchfn::sphere;
+
+            let Configuration {
+                training,
+                testing,
+                noise_level,
+                seed,
+            } = *self;
+
+            let mut rng = RNG::new_with_seed(seed);
+
+            let xs_features = generate_training_set(training, &mut rng);
+
+            let ys = xs_features
+                .map_axis(Axis(1), sphere)
+                .mapv_into(|y| rng.normal(y, noise_level));
+
+            let model = train_model(xs_features.clone(), ys, &mut rng);
+
+            let xs_test_features = testing.generate_test_set(xs_features.view(), &mut rng);
+
+            let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
+            let (predicted_ys, predicted_std): (Vec<_>, Vec<_>) = xs_test_features
+                .outer_iter()
+                .map(|x| {
+                    let stats = model.predict_statistics(x.to_owned());
+                    (stats.mean(), stats.std())
+                })
+                .unzip();
+
+            Results {
+                test_x1: xs_test_features.index_axis(Axis(1), 0).to_vec(),
+                test_x2: xs_test_features.index_axis(Axis(1), 1).to_vec(),
+                expected_y: expected_ys.to_vec(),
+                actual_y: predicted_ys,
+                actual_std: predicted_std,
+            }
+        }
+    }
+
+    fn generate_training_set(training_set: TrainingSet, rng: &mut RNG) -> Array2<f64> {
         match training_set {
-            "randomTraining" => Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0..=2.0)),
-            "gridTraining" => {
+            TrainingSet::Random => Array::zeros((50, 2)).mapv_into(|_| rng.uniform(-2.0..=2.0)),
+            TrainingSet::Grid => {
                 const SIZE: usize = 7;
                 let gridaxis = Array::linspace(-2.0, 2.0, SIZE);
                 Array::from_shape_fn((SIZE * SIZE, 2), |(i, j)| {
@@ -325,7 +451,21 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
                     }
                 })
             }
-            _ => unimplemented!("{}", training_set),
+        }
+    }
+
+    impl TestMode {
+        fn generate_test_set(self, training_set: ArrayView2<f64>, rng: &mut RNG) -> Array2<f64> {
+            match self {
+                Self::SelfTest => training_set.to_owned(),
+                Self::NewSample => Array::from_shape_fn((25, 2), |(i, _)| {
+                    if i < 15 {
+                        rng.uniform(-2.0..=2.0)
+                    } else {
+                        rng.uniform(-1.0..=1.0)
+                    }
+                }),
+            }
         }
     }
 
@@ -342,147 +482,179 @@ fn it_works_in_2d(rng_seed: usize, training_set: &str, noise_level: f64, testmod
             .expect("model should train successfully")
     }
 
-    let cond = |cond, value| if cond { Some(value) } else { None };
-
-    let allowed_failures = (noise_level > 1.0) as usize
-        + (testmode == "newsample") as usize
-        + ((training_set, testmode) == ("randomTraining", "newsample")) as usize;
-
-    let allowed_noise = [
-        Some(noise_level),
-        Some(0.1),
-        cond(training_set == "randomTraining", 0.1),
-        cond(testmode == "newsample", 0.1),
-        cond(testmode == "selftest" && noise_level == 0.0, 0.1),
-    ]
-    .iter()
-    .flatten()
-    .sum();
-
-    let xs_test_features = match testmode {
-        "selftest" => xs_features.clone(),
-        "newsample" => Array::from_shape_fn((25, 2), |(i, _)| {
-            if i < 15 {
-                rng.uniform(-2.0..=2.0)
-            } else {
-                rng.uniform(-1.0..=1.0)
-            }
-        }),
-        _ => unimplemented!("{}", testmode),
-    };
-
-    let expected_ys = xs_test_features.map_axis(Axis(1), sphere);
-    let (predicted_ys, predicted_std): (Vec<_>, Vec<_>) = xs_test_features
-        .outer_iter()
-        .map(|x| {
-            let stats = model.predict_statistics(x.to_owned());
-            (stats.mean(), stats.std())
-        })
-        .unzip();
-    let predicted_ys = Array1::from(predicted_ys);
-    let predicted_std = Array1::from(predicted_std);
-
-    let error = (&predicted_ys - &expected_ys)
-        .mapv_into(|error| error.powi(2))
-        .mean_axis(Axis(0))
-        .expect("mean should exist")
-        .into_scalar()
-        .sqrt();
-
-    assert_relation!(operator <, error, allowed_noise);
-
-    fn index_locs<'a, T>(
-        items: impl IntoIterator<Item = T> + 'a,
-        locs: &'a [bool],
-    ) -> impl Iterator<Item = T> + 'a {
-        items
-            .into_iter()
-            .zip_eq(locs.iter().cloned())
-            .filter_map(|(el, ok)| if ok { Some(el) } else { None })
+    struct RecordIterator<'a> {
+        results: &'a Results,
+        i: usize,
     }
 
-    // assert_eq!(index_locs(vec![1 as usize, 2], &vec![false, true]).collect_vec(),
-    //            vec![2 as usize]);
+    impl<'a> Iterator for RecordIterator<'a> {
+        type Item = Record;
 
-    struct LocInfo<'a> {
-        locs: Vec<bool>,
-        xs_test: ArrayView2<'a, f64>,
-        predicted_ys: ArrayView1<'a, f64>,
-        expected_ys: ArrayView1<'a, f64>,
-        predicted_std: ArrayView1<'a, f64>,
-    };
+        fn next(&mut self) -> Option<Self::Item> {
+            let Self {
+                ref results,
+                ref mut i,
+            } = self;
+            if *i < results.len() {
+                let item = Record {
+                    test_x1: results.test_x1[*i],
+                    test_x2: results.test_x2[*i],
+                    expected_y: results.expected_y[*i],
+                    actual_y: results.actual_y[*i],
+                    actual_std: results.actual_std[*i],
+                };
+                *i += 1;
+                Some(item)
+            } else {
+                None
+            }
+        }
+    }
 
-    impl<'a> std::fmt::Debug for LocInfo<'a> {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            let locs = &self.locs;
-            writeln!(f, "locs [{}]", locs.iter().join(", "))?;
-            writeln!(
-                f,
-                "x1       [{}]",
-                index_locs(self.xs_test.index_axis(Axis(1), 0), locs).join(", ")
-            )?;
-            writeln!(
-                f,
-                "x2       [{}]",
-                index_locs(self.xs_test.index_axis(Axis(1), 1), locs).join(", ")
-            )?;
+    #[allow(dead_code)]
+    enum Never {}
 
-            writeln!(
-                f,
-                "ys our   [{}]",
-                index_locs(self.predicted_ys, locs).join(", ")
-            )?;
-            writeln!(
-                f,
-                "ys expec [{}]",
-                index_locs(self.expected_ys, locs).join(", ")
-            )?;
-            writeln!(
-                f,
-                "std our  [{}]",
-                index_locs(self.predicted_std, locs).join(", ")
-            )?;
+    impl Results {
+        fn len(&self) -> usize {
+            self.test_x1.len()
+        }
+
+        fn records(&self) -> RecordIterator {
+            RecordIterator {
+                results: self,
+                i: 0,
+            }
+        }
+
+        fn global_mse(&self) -> f64 {
+            let sum: f64 = self
+                .actual_y
+                .iter()
+                .zip(&self.expected_y)
+                .map(|(actual, expected)| (actual - expected).powi(2))
+                .sum();
+            let mean = sum / (self.len() as f64);
+            mean.sqrt()
+        }
+
+        fn look_good(self, conf: &Configuration) -> Result<(), Box<dyn FnOnce() -> Never>> {
+            let allowed_noise = conf.allowed_noise();
+            let allowed_failures = conf.allowed_failures();
+            let seed = conf.seed;
+
+            let global_mse = self.global_mse();
+            if global_mse > allowed_noise {
+                return Err(Box::new(move || {
+                    panic!(
+                        "Too large average error!\n\
+                         seed: {}\n\
+                         global_mse:    {}\n\
+                         allowed_noise: {}\n\
+                         --- samples:\n\
+                         {}\n\
+                         ---",
+                        seed, global_mse, allowed_noise, self,
+                    )
+                }));
+            }
+
+            let prediction_not_ok: Results = self
+                .records()
+                .filter(|r| !r.y_is_within_plausible_bounds(-2.0, 1.0, allowed_noise))
+                .collect();
+            let prediction_not_ok_count = prediction_not_ok.len();
+            if prediction_not_ok_count > allowed_failures {
+                return Err(Box::new(move || {
+                    panic!(
+                        "Incorrect prediction ({})\n\
+                         seed: {}\n\
+                         --- samples:\n\
+                         {}\n\
+                         ---",
+                        seed, prediction_not_ok_count, prediction_not_ok,
+                    )
+                }));
+            }
+
+            let std_not_ok: Results = self
+                .records()
+                .filter(|r| !r.std_is_within_reasonable_bounds(1.5 * allowed_noise))
+                .collect();
+            let std_not_ok_count = std_not_ok.len();
+            if std_not_ok_count > allowed_failures {
+                return Err(Box::new(move || {
+                    panic!(
+                        "Detected large variances ({} over {})\n\
+                         seed: {}\n\
+                         ---\n\
+                         {}\n\
+                         ---",
+                        seed,
+                        std_not_ok_count,
+                        1.5 * allowed_noise,
+                        std_not_ok,
+                    )
+                }));
+            }
+
             Ok(())
         }
     }
 
-    let bound = |zscore: f64| {
-        expected_ys.clone() + zscore * &predicted_std + zscore.signum() * allowed_noise
-    };
-
-    let prediction_not_ok = izip!(bound(-2.0).iter(), predicted_ys.iter(), bound(1.0).iter())
-        .map(|(lo, y, hi)| !(lo <= y && y <= hi))
-        .collect_vec();
-    let prediction_not_ok_count: usize = prediction_not_ok.iter().map(|ok| *ok as usize).sum();
-    assert!(
-        prediction_not_ok_count <= allowed_failures,
-        "Incorrect prediction ({})\n{:?}",
-        prediction_not_ok_count,
-        LocInfo {
-            locs: prediction_not_ok,
-            xs_test: xs_test_features.view(),
-            predicted_ys: predicted_ys.view(),
-            expected_ys: expected_ys.view(),
-            predicted_std: predicted_std.view(),
+    impl std::fmt::Display for Results {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            let mut want_newline = false;
+            for r in self.records() {
+                if std::mem::replace(&mut want_newline, true) {
+                    writeln!(f)?;
+                }
+                write!(
+                    f,
+                    "x1={:+1.10} x2={:+1.10} y={:+1.10} | y={:+1.10} std={:+1.10}",
+                    r.test_x1, r.test_x2, r.expected_y, r.actual_y, r.actual_std,
+                )?;
+            }
+            Ok(())
         }
-    );
+    }
 
-    let std_not_ok = predicted_std
-        .iter()
-        .map(|&std| std >= 1.5 * allowed_noise)
-        .collect_vec();
-    let std_not_ok_count: usize = std_not_ok.iter().map(|&ok| ok as usize).sum();
-    assert!(
-        std_not_ok_count <= allowed_failures,
-        "Detected large variances ({} over {})\n{:?}",
-        std_not_ok_count,
-        allowed_noise,
-        LocInfo {
-            locs: std_not_ok,
-            xs_test: xs_test_features.view(),
-            predicted_ys: predicted_ys.view(),
-            expected_ys: expected_ys.view(),
-            predicted_std: predicted_std.view(),
+    impl std::iter::FromIterator<Record> for Results {
+        fn from_iter<I>(records: I) -> Self
+        where
+            I: IntoIterator<Item = Record>,
+        {
+            let records = Vec::from_iter(records);
+            Results {
+                test_x1: records.iter().map(|r| r.test_x1).collect(),
+                test_x2: records.iter().map(|r| r.test_x2).collect(),
+                expected_y: records.iter().map(|r| r.expected_y).collect(),
+                actual_y: records.iter().map(|r| r.actual_y).collect(),
+                actual_std: records.iter().map(|r| r.actual_std).collect(),
+            }
         }
-    );
+    }
+
+    impl Record {
+        fn y_is_within_plausible_bounds(
+            &self,
+            zscore_lo: f64,
+            zscore_hi: f64,
+            allowed_noise: f64,
+        ) -> bool {
+            let Self {
+                expected_y,
+                actual_y,
+                actual_std,
+                ..
+            } = *self;
+            let bound_lo = expected_y + zscore_lo * actual_std + zscore_lo.signum() * allowed_noise;
+            let bound_hi = expected_y + zscore_hi * actual_std + zscore_hi.signum() * allowed_noise;
+            bound_lo <= actual_y && actual_y <= bound_hi
+        }
+
+        fn std_is_within_reasonable_bounds(&self, bound: f64) -> bool {
+            let Self { actual_std, .. } = *self;
+            actual_std <= bound
+        }
+    }
 }
